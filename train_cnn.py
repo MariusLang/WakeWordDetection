@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 
-from data_loader import load_config, load_training_data
+from utils.data_loader import load_config, load_training_data
 from dataset.wake_word_dataset import WakeWordDataset
 from model.wake_word_cnn import WakeWordCNN
 from train.evaluate import evaluate

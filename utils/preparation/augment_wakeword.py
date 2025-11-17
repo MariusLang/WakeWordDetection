@@ -1,7 +1,5 @@
 import os
 import random
-import urllib
-import zipfile
 from glob import glob
 
 import soundfile as sf
@@ -11,7 +9,6 @@ import numpy as np
 from scipy.signal import fftconvolve
 
 def generate_synthetic_noises(n=5, sr=16000):
-    """Erzeuge n einfache Rauschsignale (weißes Rauschen) als Fallback."""
     noises = []
     for i in range(n):
         dur = np.random.uniform(1.0, 3.0)  # 1–3 Sekunden
@@ -23,13 +20,12 @@ def generate_synthetic_noises(n=5, sr=16000):
 
 
 def generate_synthetic_rirs(n=5, sr=16000):
-    """Erzeuge n künstliche, simpel modellierte RIRs (exponentiell abklingend)."""
     rirs = []
     for i in range(n):
         dur = np.random.uniform(0.1, 0.5)  # 100–500 ms
         N = int(dur * sr)
         t = np.linspace(0, dur, N)
-        decay = np.exp(-3 * t / dur)  # exponentieller Abfall
+        decay = np.exp(-3 * t / dur)
         rir = np.random.randn(N) * decay
         rir /= (np.max(np.abs(rir)) + 1e-6)
         rirs.append(rir.astype(np.float32))
@@ -37,26 +33,21 @@ def generate_synthetic_rirs(n=5, sr=16000):
 
 
 def add_noise(x, noise, snr_db):
-    """Add noise to x at desired SNR, correctly matching lengths."""
     Nx = len(x)
     Nn = len(noise)
 
-    # Noise verlängern oder zuschneiden
+    # Adapt noise length
     if Nn < Nx:
-        # Noise wiederholen bis mindestens Nx Länge
         reps = int(np.ceil(Nx / Nn))
         noise = np.tile(noise, reps)
         noise = noise[:Nx]
 
     elif Nn > Nx:
-        # Noise zufällig zuschneiden
         start = np.random.randint(0, Nn - Nx)
         noise = noise[start:start + Nx]
 
-    # Jetzt garantiert: len(noise) == len(x)
     assert len(noise) == len(x)
 
-    # SNR skalieren
     rms_x = np.sqrt(np.mean(x ** 2))
     rms_n = np.sqrt(np.mean(noise ** 2) + 1e-9)
     snr = 10 ** (snr_db / 20)
@@ -155,10 +146,10 @@ def load_rirs(rir_dir, sr=16000):
 
 
 if __name__ == '__main__':
-    wakeword_dir = 'data/wakeword'
-    out_dir = 'data/wakeword_augmented'
-    noise_dir = 'data/noise'
-    rir_dir = 'data/rir'
+    wakeword_dir = '../../data/wakeword'
+    out_dir = '../../data/wakeword_augmented'
+    noise_dir = '../../data/noise'
+    rir_dir = '../../data/rir'
 
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(noise_dir, exist_ok=True)
@@ -167,18 +158,10 @@ if __name__ == '__main__':
     wakeword_files = glob(os.path.join(wakeword_dir, '*.wav'))
     print(f'Found {len(wakeword_files)} wakeword files.')
 
-    noises = load_noises(noise_dir)
-    rirs = load_rirs(rir_dir)
+    noises = generate_synthetic_noises(sr=16000)
+    rirs = generate_synthetic_rirs(sr=16000)
 
-    if len(noises) == 0:
-        print('[WARN] No noise WAVs found in data/noise – generating synthetic noises.')
-        noises = generate_synthetic_noises(sr=16000)
-
-    if len(rirs) == 0:
-        print('[WARN] No RIR WAVs found in data/rir – generating synthetic RIRs.')
-        rirs = generate_synthetic_rirs(sr=16000)
-
-    print(f'Loaded {len(noises)} noises and {len(rirs)} rirs.')
+    print(f'Generated {len(noises)} noises and {len(rirs)} rirs.')
 
     total = 0
 

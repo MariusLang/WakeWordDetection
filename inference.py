@@ -2,7 +2,7 @@ import sys
 import torch
 import numpy as np
 
-from data_loader import load_config, compute_mel_spectrogram
+from utils.data_loader import load_config, compute_mel_spectrogram
 from train_cnn import WakeWordCNN, normalize_segments
 from utils.get_device import get_device
 
