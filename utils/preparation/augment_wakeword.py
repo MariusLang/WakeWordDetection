@@ -146,10 +146,10 @@ def load_rirs(rir_dir, sr=16000):
 
 
 if __name__ == '__main__':
-    wakeword_dir = '../../data/wakeword'
-    out_dir = '../../data/wakeword_augmented'
-    noise_dir = '../../data/noise'
-    rir_dir = '../../data/rir'
+    wakeword_dir = 'data/wakeword'
+    out_dir = 'data/wakeword_augmented'
+    noise_dir = 'data/noise'
+    rir_dir = 'data/rir'
 
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(noise_dir, exist_ok=True)
