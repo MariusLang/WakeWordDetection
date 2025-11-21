@@ -6,7 +6,7 @@ samplerate = 16000  # Hz
 channels = 1
 
 if __name__ == '__main__':
-    filename = f'recording_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.wav'
+    filename = f'recording_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.wav'
 
     print(f'Recording ... Press CTRL+C to stop.\nFile: {filename}')
 
