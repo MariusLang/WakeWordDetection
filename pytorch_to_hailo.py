@@ -13,7 +13,7 @@ def export_to_onnx(model, onnx_path, input_shape):
         onnx_path,
         input_names=['input'],
         output_names=['output'],
-        opset_version=18,
+        opset_version=17,
         dynamic_axes=None
     )
     print(f'Exported ONNX: {onnx_path}')
