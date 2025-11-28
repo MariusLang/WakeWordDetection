@@ -8,6 +8,7 @@
       <excludeFolder url="file://$MODULE_DIR$/data/noise" />
       <excludeFolder url="file://$MODULE_DIR$/data/non_wakeword" />
       <excludeFolder url="file://$MODULE_DIR$/data/rir" />
+      <excludeFolder url="file://$MODULE_DIR$/calibration_data" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12 (WakeWordDetection)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
