@@ -2,55 +2,12 @@ import sys
 import numpy as np
 import sounddevice as sd
 import queue
-import threading
 from datetime import datetime
 from hailo_platform import VDevice, HEF, InputVStreams, OutputVStreams, InputVStreamParams, OutputVStreamParams, \
     FormatType
 
 from utils.data_loader import load_config
-from utils.audio_processing import compute_mel_spectrogram_from_audio
-
-
-def normalize_segments(segments):
-    """Normalize each segment individually to match training preprocessing."""
-    from sklearn.preprocessing import StandardScaler
-    segments_norm = np.zeros_like(segments)
-    for i in range(len(segments)):
-        scaler = StandardScaler()
-        segments_norm[i] = scaler.fit_transform(segments[i])
-    return segments_norm
-
-
-def preprocess_audio_chunk(audio_data, cfg):
-    """Preprocess audio chunk into segments for inference."""
-    SR = cfg['SR']
-    N_MELS = cfg['N_MELS']
-    N_FFT = cfg['N_FFT']
-    HOP = cfg['HOP']
-    SEGMENT_FRAMES = cfg['SEGMENT_FRAMES']
-
-    # Compute mel spectrogram from audio array
-    spec = compute_mel_spectrogram_from_audio(audio_data, SR, N_FFT, HOP, N_MELS)
-
-    if spec.shape[1] < SEGMENT_FRAMES:
-        pad = SEGMENT_FRAMES - spec.shape[1]
-        spec = np.pad(spec, ((0, 0), (0, pad)), mode='constant')
-
-    segments = []
-    for start in range(0, spec.shape[1] - SEGMENT_FRAMES + 1, 10):
-        seg = spec[:, start:start + SEGMENT_FRAMES]
-        segments.append(seg)
-
-    if len(segments) == 0:
-        return None
-
-    segments = np.array(segments)
-    segments_norm = normalize_segments(segments)
-
-    # Add channel dimension for Hailo (HWC format)
-    segments_norm = np.expand_dims(segments_norm, axis=-1)
-
-    return segments_norm.astype(np.float32)
+from utils.audio_processing import preprocess_audio_chunk
 
 
 class ContinuousWakeWordDetector:

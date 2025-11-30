@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
+from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
@@ -18,14 +20,27 @@ from utils.data_processing import generate_balanced_classes
 from utils.get_device import get_device
 
 
-def draw_confusion_matrix(trues, preds):
+def draw_confusion_matrix(trues, preds, writer=None):
     cm = confusion_matrix(trues, preds)
-    plt.imshow(cm, cmap='Blues')
-    plt.title('Confusion Matrix')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.colorbar()
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    im = ax.imshow(cm, cmap='Blues')
+    ax.set_title('Confusion Matrix')
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('True')
+    plt.colorbar(im, ax=ax)
+
+    # Add text annotations
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, str(cm[i, j]), ha='center', va='center', color='red')
+
+    # Log to TensorBoard if writer provided
+    if writer is not None:
+        writer.add_figure('Confusion_Matrix', fig)
+
     plt.show()
+    plt.close(fig)
 
 
 def save_model(model, path):
@@ -69,19 +84,41 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
+    # TensorBoard setup
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    writer = SummaryWriter(f'runs/wakeword_cnn_{timestamp}')
+
+    # Log model graph
+    sample_input = torch.randn(1, *input_shape).to(device)
+    writer.add_graph(model, sample_input)
+
     # Train
     EPOCHS = cfg['EPOCHS']
     for epoch in range(EPOCHS):
         loss = train(model, train_loader, criterion, optimizer, device)
         acc, _, _ = evaluate(model, test_loader, device)
+
+        # Log metrics to TensorBoard
+        writer.add_scalar('Loss/train', loss, epoch)
+        writer.add_scalar('Accuracy/test', acc, epoch)
+        writer.add_scalar('Learning_rate', optimizer.param_groups[0]['lr'], epoch)
+
         print(f'Epoch {epoch + 1}/{EPOCHS} | Loss {loss:.4f} | Test Acc {acc:.4f}')
 
     # Final evaluation
     acc, preds, trues = evaluate(model, test_loader, device)
     print(f'\nFinal Test Accuracy: {acc:.4f}')
 
+    # Log final accuracy to TensorBoard
+    writer.add_scalar('Accuracy/final', acc, 0)
+
     # Confusion Matrix
-    draw_confusion_matrix(trues, preds)
+    draw_confusion_matrix(trues, preds, writer)
 
     # Save model
     save_model(model, 'wakeword_cnn.pt')
+
+    # Close TensorBoard writer
+    writer.close()
+    print(f'\nTensorBoard logs saved to runs/wakeword_cnn_{timestamp}')
+    print('To view: tensorboard --logdir=runs')

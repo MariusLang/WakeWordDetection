@@ -3,46 +3,8 @@ import numpy as np
 from hailo_platform import VDevice, HEF, InputVStreams, OutputVStreams, InputVStreamParams, OutputVStreamParams, \
     FormatType
 
-from utils.data_loader import load_config, compute_mel_spectrogram
-
-
-def normalize_segments(segments):
-    """Normalize each segment individually to match training preprocessing."""
-    from sklearn.preprocessing import StandardScaler
-    segments_norm = np.zeros_like(segments)
-    for i in range(len(segments)):
-        scaler = StandardScaler()
-        segments_norm[i] = scaler.fit_transform(segments[i])
-    return segments_norm
-
-
-def preprocess_audio(fn, cfg):
-    """Preprocess audio file into segments for inference - matches PyTorch version."""
-    SR = cfg['SR']
-    N_MELS = cfg['N_MELS']
-    N_FFT = cfg['N_FFT']
-    HOP = cfg['HOP']
-    SEGMENT_FRAMES = cfg['SEGMENT_FRAMES']
-
-    spec = compute_mel_spectrogram(fn, SR, N_FFT, HOP, N_MELS)
-
-    if spec.shape[1] < SEGMENT_FRAMES:
-        pad = SEGMENT_FRAMES - spec.shape[1]
-        spec = np.pad(spec, ((0, 0), (0, pad)), mode='constant')
-
-    segments = []
-    for start in range(0, spec.shape[1] - SEGMENT_FRAMES + 1, 10):
-        seg = spec[:, start:start + SEGMENT_FRAMES]
-        segments.append(seg)
-
-    segments = np.array(segments)
-    segments_norm = normalize_segments(segments)
-
-    # IMPORTANT: Add channel dimension at axis=-1 for Hailo (HWC format)
-    # Hailo expects (H, W, C) = (40, 100, 1) format, not PyTorch's (C, H, W)
-    segments_norm = np.expand_dims(segments_norm, axis=-1)
-
-    return segments_norm.astype(np.float32)
+from utils.data_loader import load_config
+from utils.audio_processing import preprocess_audio_file
 
 
 def predict_wakeword(fn, hef_path='wakeword.hef'):
@@ -52,7 +14,7 @@ def predict_wakeword(fn, hef_path='wakeword.hef'):
     print(f'Loading model: {hef_path}')
 
     # Preprocess audio into segments
-    X = preprocess_audio(fn, cfg)
+    X = preprocess_audio_file(fn, cfg)
     print(f'Created {X.shape[0]} segments from file.')
     print(f'Segment shape: {X.shape[1:]}')
 
