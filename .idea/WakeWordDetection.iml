@@ -6,9 +6,9 @@
       <excludeFolder url="file://$MODULE_DIR$/data" />
       <excludeFolder url="file://$MODULE_DIR$/data/bed" />
       <excludeFolder url="file://$MODULE_DIR$/data/noise" />
-      <excludeFolder url="file://$MODULE_DIR$/data/non_wakeword" />
       <excludeFolder url="file://$MODULE_DIR$/data/rir" />
       <excludeFolder url="file://$MODULE_DIR$/calibration_data" />
+      <excludeFolder url="file://$MODULE_DIR$/data/non_wakeword_google_download" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12 (WakeWordDetection)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

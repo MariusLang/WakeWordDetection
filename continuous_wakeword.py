@@ -1,6 +1,8 @@
 import sys
+import os
 import numpy as np
 import sounddevice as sd
+import soundfile as sf
 import queue
 from datetime import datetime
 from hailo_platform import VDevice, HEF, InputVStreams, OutputVStreams, InputVStreamParams, OutputVStreamParams, \
@@ -14,7 +16,8 @@ class ContinuousWakeWordDetector:
     """Continuous wake word detector using microphone input."""
 
     def __init__(self, hef_path='wakeword.hef', sample_rate=16000, chunk_duration=1.5,
-                 detection_threshold=0.2, cooldown_seconds=2.0):
+                 detection_threshold=0.2, cooldown_seconds=2.0, save_detections=True,
+                 detection_dir='detections'):
         self.hef_path = hef_path
         self.sample_rate = sample_rate
         self.chunk_duration = chunk_duration
@@ -22,10 +25,18 @@ class ContinuousWakeWordDetector:
         self.detection_threshold = detection_threshold
         self.cooldown_seconds = cooldown_seconds
         self.last_detection_time = None
+        self.save_detections = save_detections
+        self.detection_dir = detection_dir
 
         self.cfg = load_config()
         self.audio_queue = queue.Queue()
         self.running = False
+        self.detection_count = 0
+
+        # Create detection directory if saving is enabled
+        if self.save_detections:
+            os.makedirs(self.detection_dir, exist_ok=True)
+            print(f'Detection recordings will be saved to: {self.detection_dir}/')
 
         print(f'Initializing Continuous Wake Word Detector')
         print(f'Sample rate: {sample_rate} Hz')
@@ -83,6 +94,27 @@ class ContinuousWakeWordDetector:
             return True
         elapsed = (datetime.now() - self.last_detection_time).total_seconds()
         return elapsed >= self.cooldown_seconds
+
+    def save_detection_audio(self, audio_chunk, max_prob, ratio):
+        """Save audio chunk when wakeword is detected."""
+        if not self.save_detections:
+            return None
+
+        try:
+            # Generate filename with timestamp and metadata
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            self.detection_count += 1
+
+            filename = f'detection_{timestamp}_prob{max_prob:.3f}_ratio{ratio:.3f}_{self.detection_count:04d}.wav'
+            filepath = os.path.join(self.detection_dir, filename)
+
+            # Save as WAV file
+            sf.write(filepath, audio_chunk, self.sample_rate)
+
+            return filepath
+        except Exception as e:
+            print(f'\nError saving detection audio: {e}')
+            return None
 
     def run(self):
         """Start continuous detection."""
@@ -146,8 +178,14 @@ class ContinuousWakeWordDetector:
                                         timestamp = datetime.now().strftime('%H:%M:%S')
 
                                         if detected and self.should_detect():
-                                            print(f'[{timestamp}] ✅ WAKE WORD DETECTED! '
-                                                  f'(max_prob: {max_prob:.3f}, ratio: {ratio:.3f})')
+                                            # Save detection audio
+                                            saved_path = self.save_detection_audio(audio_chunk, max_prob, ratio)
+
+                                            detection_msg = f'[{timestamp}] ✅ WAKE WORD DETECTED! (max_prob: {max_prob:.3f}, ratio: {ratio:.3f})'
+                                            if saved_path:
+                                                detection_msg += f' - Saved: {os.path.basename(saved_path)}'
+                                            print(detection_msg)
+
                                             self.last_detection_time = datetime.now()
                                         else:
                                             # Print a dot to show it's listening (optional)
@@ -159,32 +197,63 @@ class ContinuousWakeWordDetector:
                                 print('\n\n🛑 Stopping detection...')
                                 self.running = False
 
+                                # Print summary
+                                if self.save_detections and self.detection_count > 0:
+                                    print(f'\n📊 Session Summary:')
+                                    print(f'   Total detections: {self.detection_count}')
+                                    print(f'   Recordings saved in: {self.detection_dir}/')
+                                    print(f'\n💡 Review recordings to check for false positives')
+
 
 def main():
     """Main entry point."""
-    # Parse arguments
-    hef_path = 'wakeword.hef'
-    sample_rate = 16000
-    chunk_duration = 1.5
-    detection_threshold = 0.2
-    cooldown = 2.0
+    import argparse
 
-    if len(sys.argv) > 1:
-        hef_path = sys.argv[1]
-    if len(sys.argv) > 2:
-        detection_threshold = float(sys.argv[2])
-    if len(sys.argv) > 3:
-        cooldown = float(sys.argv[3])
+    parser = argparse.ArgumentParser(
+        description='Continuous wake word detection with audio recording',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic usage with default settings
+  %(prog)s
+
+  # Specify HEF model and threshold
+  %(prog)s --hef wakeword_v2.hef --threshold 0.3
+
+  # Disable saving detection recordings
+  %(prog)s --no-save
+
+  # Custom detection directory
+  %(prog)s --detection-dir my_detections
+        """
+    )
+
+    parser.add_argument('--hef', type=str, default='wakeword.hef',
+                        help='Path to HEF model file (default: wakeword.hef)')
+    parser.add_argument('--threshold', type=float, default=0.2,
+                        help='Detection threshold (default: 0.2)')
+    parser.add_argument('--cooldown', type=float, default=2.0,
+                        help='Cooldown seconds between detections (default: 2.0)')
+    parser.add_argument('--chunk-duration', type=float, default=1.5,
+                        help='Audio chunk duration in seconds (default: 1.5)')
+    parser.add_argument('--no-save', action='store_true',
+                        help='Do not save detection audio files')
+    parser.add_argument('--detection-dir', type=str, default='detections',
+                        help='Directory to save detection recordings (default: detections)')
+
+    args = parser.parse_args()
 
     print('Continuous Wake Word Detection')
     print('='*60)
 
     detector = ContinuousWakeWordDetector(
-        hef_path=hef_path,
-        sample_rate=sample_rate,
-        chunk_duration=chunk_duration,
-        detection_threshold=detection_threshold,
-        cooldown_seconds=cooldown
+        hef_path=args.hef,
+        sample_rate=16000,
+        chunk_duration=args.chunk_duration,
+        detection_threshold=args.threshold,
+        cooldown_seconds=args.cooldown,
+        save_detections=not args.no_save,
+        detection_dir=args.detection_dir
     )
 
     try:
