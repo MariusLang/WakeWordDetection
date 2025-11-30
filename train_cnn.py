@@ -15,6 +15,7 @@ from dataset.wake_word_dataset import WakeWordDataset
 from model.wake_word_cnn import WakeWordCNN
 from train.evaluate import evaluate
 from train.train import train
+from train.early_stopping import EarlyStopping
 from utils.audio_processing import normalize_segments
 from utils.data_processing import generate_balanced_classes
 from utils.get_device import get_device
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     cfg = load_config()
     X, y = load_training_data(cfg)
 
-    X, y = generate_balanced_classes(X, y)
+    X, y = generate_balanced_classes(X, y, wakeword_ratio=cfg['WAKEWORD_RATIO'])
 
     X = normalize_segments(X)
     X = np.expand_dims(X, axis=1)
@@ -92,6 +93,14 @@ if __name__ == '__main__':
     sample_input = torch.randn(1, *input_shape).to(device)
     writer.add_graph(model, sample_input)
 
+    # Early stopping setup
+    early_stopping = EarlyStopping(
+        patience=cfg['EARLY_STOPPING_PATIENCE'],
+        min_delta=cfg['EARLY_STOPPING_MIN_DELTA'],
+        mode='max',  # Monitoring accuracy (higher is better)
+        verbose=True
+    )
+
     # Train
     EPOCHS = cfg['EPOCHS']
     for epoch in range(EPOCHS):
@@ -104,6 +113,12 @@ if __name__ == '__main__':
         writer.add_scalar('Learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
         print(f'Epoch {epoch + 1}/{EPOCHS} | Loss {loss:.4f} | Test Acc {acc:.4f}')
+
+        # Check early stopping
+        if early_stopping(acc, epoch):
+            print(f'\nEarly stopping triggered at epoch {epoch + 1}')
+            print(f'Best accuracy: {early_stopping.get_best_score():.4f} at epoch {early_stopping.get_best_epoch() + 1}')
+            break
 
     # Final evaluation
     acc, preds, trues = evaluate(model, test_loader, device)
