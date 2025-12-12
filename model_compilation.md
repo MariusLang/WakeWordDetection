@@ -59,7 +59,7 @@ python3 pytorch_to_hailo.py \
 
 **Verify ONNX export**:
 ```bash
-python3 -c "import onnx; model = onnx.load('experiments/wakeword_model_20251212_171319/model.onnx'); print('Inputs:', [(inp.name, [d.dim_value for d in inp.type.tensor_type.shape.dim]) for inp in model.graph.input]); print('Outputs:', [(out.name, [d.dim_value for d in out.type.tensor_type.shape.dim]) for out in model.graph.output])"
+python3 -c "import onnx; model = onnx.load('experiments/wakeword_model_20251212_175450/model.onnx'); print('Inputs:', [(inp.name, [d.dim_value for d in inp.type.tensor_type.shape.dim]) for inp in model.graph.input]); print('Outputs:', [(out.name, [d.dim_value for d in out.type.tensor_type.shape.dim]) for out in model.graph.output])"
 ```
 
 Expected: `Inputs: [('input', [1, 1, 40, 100])]`, `Outputs: [('output', [1, 2])]`
@@ -84,8 +84,7 @@ rsync -av calibration_data \
 ### 3.2 Transfer ONNX Model
 
 ```bash
-rsync -av experiments/wakeword_model_20251212_171319/model.onnx \
-    marius@192.168.178.62:/home/marius/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/
+rsync -av experiments/wakeword_model_20251212_175450/model.onnx marius@192.168.178.62:/home/marius/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/
 ```
 
 **Verify transfer**:
@@ -236,7 +235,7 @@ From your **Mac**:
 ```bash
 rsync -avz \
     marius@192.168.178.62:/home/marius/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/model.hef \
-    ./experiments/wakeword_model_20251212_171319/model.hef
+    ./experiments/wakeword_model_20251212_175450/model.hef
 ```
 
 **Verify transfer**:
@@ -252,7 +251,7 @@ ls -lh model.hef
 ### 9.1 Transfer HEF Model
 
 ```bash
-rsync -av experiments/wakeword_model_20251212_171319/model.hef \
+rsync -av experiments/wakeword_model_20251212_175450/model.hef \
     pi@192.168.178.192:/home/pi/WakeWordDetection/wakeword.hef
 ```
 
