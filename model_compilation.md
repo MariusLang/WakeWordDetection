@@ -43,8 +43,8 @@ Convert your PyTorch model to ONNX format:
 
 ```bash
 python3 pytorch_to_hailo.py \
-    --pt wakeword_cnn.pt \
-    --onnx wakeword.onnx \
+    --pt experiments/wakeword_model_20251212_171319/model.pt \
+    --onnx experiments/wakeword_model_20251212_171319/model.onnx \
     --shape 1 1 40 100 \
     --hw hailo8l \
     --skip_hef
@@ -59,7 +59,7 @@ python3 pytorch_to_hailo.py \
 
 **Verify ONNX export**:
 ```bash
-python3 -c "import onnx; model = onnx.load('wakeword.onnx'); print('Inputs:', [(inp.name, [d.dim_value for d in inp.type.tensor_type.shape.dim]) for inp in model.graph.input]); print('Outputs:', [(out.name, [d.dim_value for d in out.type.tensor_type.shape.dim]) for out in model.graph.output])"
+python3 -c "import onnx; model = onnx.load('experiments/wakeword_model_20251212_171319/model.onnx'); print('Inputs:', [(inp.name, [d.dim_value for d in inp.type.tensor_type.shape.dim]) for inp in model.graph.input]); print('Outputs:', [(out.name, [d.dim_value for d in out.type.tensor_type.shape.dim]) for out in model.graph.output])"
 ```
 
 Expected: `Inputs: [('input', [1, 1, 40, 100])]`, `Outputs: [('output', [1, 2])]`
@@ -84,7 +84,7 @@ rsync -av calibration_data \
 ### 3.2 Transfer ONNX Model
 
 ```bash
-rsync -av wakeword.onnx \
+rsync -av experiments/wakeword_model_20251212_171319/model.onnx \
     marius@192.168.178.62:/home/marius/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/
 ```
 
@@ -116,7 +116,7 @@ cd /local/shared_with_docker/
 
 **Verify files are present**:
 ```bash
-ls -lh wakeword.onnx
+ls -lh model.onnx
 ls calibration_data/*.npy | wc -l  # Should show 50
 ```
 
@@ -127,7 +127,7 @@ ls calibration_data/*.npy | wc -l  # Should show 50
 Convert ONNX to Hailo Archive (HAR) format:
 
 ```bash
-hailo parser onnx wakeword.onnx --hw-arch hailo8l
+hailo parser onnx model.onnx --hw-arch hailo8l
 ```
 
 **Expected output**:
@@ -145,7 +145,7 @@ hailo parser onnx wakeword.onnx --hw-arch hailo8l
 Optimize the model for Hailo-8L using your calibration data:
 
 ```bash
-hailo optimize wakeword.har \
+hailo optimize model.har \
     --calib-set-path calibration_data/ \
     --hw-arch hailo8l
 ```
@@ -188,7 +188,7 @@ Calibration: 100%|████████████████████�
 Compile the optimized HAR to final HEF executable:
 
 ```bash
-hailo compiler wakeword_optimized.har --hw-arch hailo8l
+hailo compiler model_optimized.har --hw-arch hailo8l
 ```
 
 **Note**: Do NOT use `--batch-size` or `--compression-level` flags (they're not supported in newer versions).
@@ -235,13 +235,13 @@ From your **Mac**:
 
 ```bash
 rsync -avz \
-    marius@192.168.178.62:/home/marius/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/wakeword.hef \
-    ./wakeword.hef
+    marius@192.168.178.62:/home/marius/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/model.hef \
+    ./experiments/wakeword_model_20251212_171319/model.hef
 ```
 
 **Verify transfer**:
 ```bash
-ls -lh wakeword.hef
+ls -lh model.hef
 # Should show ~877KB file
 ```
 
@@ -252,8 +252,8 @@ ls -lh wakeword.hef
 ### 9.1 Transfer HEF Model
 
 ```bash
-rsync -av wakeword.hef \
-    pi@192.168.178.194:/home/pi/WakeWordDetection/wakeword.hef
+rsync -av experiments/wakeword_model_20251212_171319/model.hef \
+    pi@192.168.178.192:/home/pi/WakeWordDetection/wakeword.hef
 ```
 
 **Replace**:
@@ -265,13 +265,13 @@ Transfer all project files to Raspberry Pi:
 
 ```bash
 git ls-files | rsync -av --files-from=- ./ \
-    pi@192.168.178.194:/home/pi/WakeWordDetection/
+    pi@192.168.178.192:/home/pi/WakeWordDetection/
 ```
 
 **Or manually sync specific directories**:
 ```bash
 rsync -av --exclude '.venv' --exclude '__pycache__' --exclude 'data' \
-    ./ pi@192.168.178.194:/home/pi/WakeWordDetection/
+    ./ pi@192.168.178.192:/home/pi/WakeWordDetection/
 ```
 
 **What this includes**:
@@ -287,7 +287,7 @@ rsync -av --exclude '.venv' --exclude '__pycache__' --exclude 'data' \
 SSH into your Raspberry Pi:
 
 ```bash
-ssh pi@192.168.178.194
+ssh pi@192.168.178.192
 cd ~/WakeWordDetection
 ```
 

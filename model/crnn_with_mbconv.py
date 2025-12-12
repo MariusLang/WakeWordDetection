@@ -31,7 +31,7 @@ class MBConvBlock(nn.Module):
 
 
 class CRNN_with_MBConv(nn.Module):
-    def __init__(self, num_classes=1):
+    def __init__(self, input_shape=None, num_classes=2):
         super().__init__()
         self.cnn = nn.Sequential(
             MBConvBlock(1, 16, expansion=4),

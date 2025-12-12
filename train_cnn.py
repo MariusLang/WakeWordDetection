@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from utils.data_loader import load_config, load_training_data
 from dataset.wake_word_dataset import WakeWordDataset
-from model.wake_word_cnn import WakeWordCNN
+from model.model_registry import get_model
 from train.evaluate import evaluate
 from train.train import train
 from train.early_stopping import EarlyStopping
@@ -51,6 +51,11 @@ def save_model(model, path):
 
 if __name__ == '__main__':
     cfg = load_config()
+
+    # Get model architecture from config
+    model_name = cfg.get('MODEL', 'cnn')
+    print(f'Model architecture (from config.ini): {model_name}')
+
     X, y = load_training_data(cfg)
 
     X, y = generate_balanced_classes(X, y, wakeword_ratio=cfg['WAKEWORD_RATIO'])
@@ -80,14 +85,16 @@ if __name__ == '__main__':
     input_shape = X_train.shape[1:]
     num_classes = len(cfg['CLASSES'])
 
-    model = WakeWordCNN(input_shape, num_classes).to(device)
+    print(f'\nCreating model: {model_name}')
+    model = get_model(model_name, input_shape, num_classes).to(device)
+    print(f'Model parameters: {sum(p.numel() for p in model.parameters()):,}')
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     # Create experiment directory
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    experiment_dir = f'experiments/wakeword_cnn_{timestamp}'
+    experiment_dir = f'experiments/wakeword_model_{timestamp}'
     tensorboard_dir = f'{experiment_dir}/tensorboard'
 
     import os
@@ -154,8 +161,12 @@ if __name__ == '__main__':
     with open(config_path, 'w') as f:
         json.dump({
             'timestamp': timestamp,
+            'model_architecture': model_name,
+            'model_parameters': sum(p.numel() for p in model.parameters()),
             'final_accuracy': float(acc),
             'epochs_trained': epoch + 1,
+            'input_shape': list(input_shape),
+            'num_classes': num_classes,
             'config': cfg
         }, f, indent=2)
     print(f'Saved config to {config_path}')
