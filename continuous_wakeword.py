@@ -4,6 +4,10 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 import queue
+import threading
+import select
+import tty
+import termios
 from datetime import datetime
 from hailo_platform import VDevice, HEF, InputVStreams, OutputVStreams, InputVStreamParams, OutputVStreamParams, \
     FormatType
@@ -17,7 +21,7 @@ class ContinuousWakeWordDetector:
 
     def __init__(self, hef_path='wakeword.hef', sample_rate=16000, chunk_duration=1.5,
                  detection_threshold=0.2, cooldown_seconds=2.0, save_detections=True,
-                 detection_dir='detections'):
+                 detection_dir='detections', manual_recording_duration=3.0):
         self.hef_path = hef_path
         self.sample_rate = sample_rate
         self.chunk_duration = chunk_duration
@@ -27,11 +31,17 @@ class ContinuousWakeWordDetector:
         self.last_detection_time = None
         self.save_detections = save_detections
         self.detection_dir = detection_dir
+        self.manual_recording_duration = manual_recording_duration
+        self.manual_recording_samples = int(sample_rate * manual_recording_duration)
 
         self.cfg = load_config()
         self.audio_queue = queue.Queue()
         self.running = False
         self.detection_count = 0
+        self.manual_detection_count = 0
+        self.manual_save_flag = False
+        self.current_audio_chunk = None
+        self.audio_history = np.array([], dtype=np.float32)
 
         # Create detection directory if saving is enabled
         if self.save_detections:
@@ -41,6 +51,7 @@ class ContinuousWakeWordDetector:
         print(f'Initializing Continuous Wake Word Detector')
         print(f'Sample rate: {sample_rate} Hz')
         print(f'Chunk duration: {chunk_duration}s')
+        print(f'Manual recording duration: {manual_recording_duration}s')
         print(f'Detection threshold: {detection_threshold}')
         print(f'Cooldown: {cooldown_seconds}s')
 
@@ -95,7 +106,30 @@ class ContinuousWakeWordDetector:
         elapsed = (datetime.now() - self.last_detection_time).total_seconds()
         return elapsed >= self.cooldown_seconds
 
-    def save_detection_audio(self, audio_chunk, max_prob, ratio):
+    def keyboard_listener(self):
+        """Thread function to listen for keyboard input."""
+        # Save terminal settings
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+
+        try:
+            # Set terminal to raw mode for single key detection
+            tty.setraw(fd)
+
+            while self.running:
+                # Check if input is available (non-blocking)
+                if select.select([sys.stdin], [], [], 0.1)[0]:
+                    key = sys.stdin.read(1)
+                    if key == 's':
+                        self.manual_save_flag = True
+                    elif key == '\x03':  # Ctrl+C
+                        self.running = False
+                        break
+        finally:
+            # Restore terminal settings
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    def save_detection_audio(self, audio_chunk, max_prob, ratio, manual=False):
         """Save audio chunk when wakeword is detected."""
         if not self.save_detections:
             return None
@@ -103,9 +137,14 @@ class ContinuousWakeWordDetector:
         try:
             # Generate filename with timestamp and metadata
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            self.detection_count += 1
 
-            filename = f'detection_{timestamp}_prob{max_prob:.3f}_ratio{ratio:.3f}_{self.detection_count:04d}.wav'
+            if manual:
+                self.manual_detection_count += 1
+                filename = f'manual_{timestamp}_{self.manual_detection_count:04d}.wav'
+            else:
+                self.detection_count += 1
+                filename = f'detection_{timestamp}_prob{max_prob:.3f}_ratio{ratio:.3f}_{self.detection_count:04d}.wav'
+
             filepath = os.path.join(self.detection_dir, filename)
 
             # Save as WAV file
@@ -143,6 +182,10 @@ class ContinuousWakeWordDetector:
                     output_vstream = list(output_vstreams)[0]
 
                     with network_group.activate():
+                        # Start keyboard listener in separate thread
+                        keyboard_thread = threading.Thread(target=self.keyboard_listener, daemon=True)
+                        keyboard_thread.start()
+
                         # Start audio stream
                         with sd.InputStream(
                                 samplerate=self.sample_rate,
@@ -151,7 +194,9 @@ class ContinuousWakeWordDetector:
                                 blocksize=int(self.sample_rate * 0.1)
                         ):
                             print('\n' + '=' * 60)
-                            print('🎤 LISTENING FOR WAKE WORD... (Press Ctrl+C to stop)')
+                            print('🎤 LISTENING FOR WAKE WORD...')
+                            print('   Press "s" to manually mark a wakeword')
+                            print('   Press Ctrl+C to stop')
                             print('=' * 60 + '\n')
 
                             audio_buffer = np.array([], dtype=np.float32)
@@ -161,9 +206,26 @@ class ContinuousWakeWordDetector:
                                     # Get audio from queue
                                     try:
                                         chunk = self.audio_queue.get(timeout=0.1)
-                                        audio_buffer = np.append(audio_buffer, chunk.flatten())
+                                        chunk_flat = chunk.flatten()
+                                        audio_buffer = np.append(audio_buffer, chunk_flat)
+
+                                        # Update audio history buffer with raw continuous audio (keep last N seconds)
+                                        self.audio_history = np.append(self.audio_history, chunk_flat)
+                                        if len(self.audio_history) > self.manual_recording_samples:
+                                            self.audio_history = self.audio_history[-self.manual_recording_samples:]
                                     except queue.Empty:
                                         continue
+
+                                    # Check for manual save flag
+                                    if self.manual_save_flag:
+                                        self.manual_save_flag = False
+                                        timestamp = datetime.now().strftime('%H:%M:%S')
+                                        # Save the audio history (longer recording)
+                                        saved_path = self.save_detection_audio(self.audio_history, 0.0, 0.0, manual=True)
+                                        manual_msg = f'\n[{timestamp}] 📝 MANUAL MARK! ({self.manual_recording_duration}s recording)'
+                                        if saved_path:
+                                            manual_msg += f' - Saved: {os.path.basename(saved_path)}'
+                                        print(manual_msg)
 
                                     # Process when we have enough audio
                                     if len(audio_buffer) >= self.chunk_samples:
@@ -199,9 +261,10 @@ class ContinuousWakeWordDetector:
                                 self.running = False
 
                                 # Print summary
-                                if self.save_detections and self.detection_count > 0:
+                                if self.save_detections and (self.detection_count > 0 or self.manual_detection_count > 0):
                                     print(f'\n📊 Session Summary:')
-                                    print(f'   Total detections: {self.detection_count}')
+                                    print(f'   Auto detections: {self.detection_count}')
+                                    print(f'   Manual marks: {self.manual_detection_count}')
                                     print(f'   Recordings saved in: {self.detection_dir}/')
                                     print(f'\n💡 Review recordings to check for false positives')
 
@@ -254,7 +317,8 @@ Examples:
         detection_threshold=args.threshold,
         cooldown_seconds=args.cooldown,
         save_detections=not args.no_save,
-        detection_dir=args.detection_dir
+        detection_dir=args.detection_dir,
+        manual_recording_duration=3.0  # Save 3 seconds for manual recordings
     )
 
     try:
