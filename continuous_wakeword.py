@@ -144,14 +144,15 @@ class ContinuousWakeWordDetector:
 
                     with network_group.activate():
                         # Start audio stream
-                        with sd.InputStream(samplerate=self.sample_rate,
-                                          channels=1,
-                                          callback=self.audio_callback,
-                                          blocksize=int(self.sample_rate * 0.1)):
-
-                            print('\n' + '='*60)
+                        with sd.InputStream(
+                                samplerate=self.sample_rate,
+                                channels=1,
+                                callback=self.audio_callback,
+                                blocksize=int(self.sample_rate * 0.1)
+                        ):
+                            print('\n' + '=' * 60)
                             print('🎤 LISTENING FOR WAKE WORD... (Press Ctrl+C to stop)')
-                            print('='*60 + '\n')
+                            print('=' * 60 + '\n')
 
                             audio_buffer = np.array([], dtype=np.float32)
 
@@ -168,7 +169,7 @@ class ContinuousWakeWordDetector:
                                     if len(audio_buffer) >= self.chunk_samples:
                                         # Extract chunk to process
                                         audio_chunk = audio_buffer[:self.chunk_samples]
-                                        audio_buffer = audio_buffer[self.chunk_samples//2:]  # 50% overlap
+                                        audio_buffer = audio_buffer[self.chunk_samples // 2:]  # 50% overlap
 
                                         # Run detection
                                         detected, max_prob, ratio = self.process_audio_chunk(
@@ -244,7 +245,7 @@ Examples:
     args = parser.parse_args()
 
     print('Continuous Wake Word Detection')
-    print('='*60)
+    print('=' * 60)
 
     detector = ContinuousWakeWordDetector(
         hef_path=args.hef,
