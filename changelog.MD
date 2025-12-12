@@ -59,10 +59,3 @@ architectures like `CRNN_with_MBConv`.
 model = cnn    # Use CNN model
 model = crnn   # Use CRNN model
 ```
-
-**Benefits:**
-
-- Easy to compare different architectures on the same dataset
-- Simple to add new models - just add to registry
-- Experiment tracking includes model architecture information
-- Flexible and extensible design pattern
