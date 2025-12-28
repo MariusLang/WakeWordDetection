@@ -1,11 +1,11 @@
 from model.wake_word_cnn import WakeWordCNN
 from model.crnn_with_mbconv import CRNN_with_MBConv
-from model.crnn_with_mbconv_non_gru import CRNN_Own_GRU
+from model.crnn_with_mbconv_non_gru import CRNN_TemporalConv
 
 MODEL_REGISTRY = {
     'cnn': WakeWordCNN,
     'crnn': CRNN_with_MBConv,
-    'crnn_own_gru': CRNN_Own_GRU,
+    'crnn_temporal': CRNN_TemporalConv,
 }
 
 

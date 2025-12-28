@@ -373,6 +373,10 @@ clip (capturing audio before the keypress) for model refinement. Files are saved
 Use manual marks to collect edge cases where the model missed detections, then feed them back into training to improve
 accuracy.
 
+**Microphone Configuration for Raspberry Pi:**
+
+
+
 ### Data Preparation Scripts
 
 #### `data_preparation/download_non_wakeword.py`

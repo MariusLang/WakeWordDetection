@@ -1,5 +1,4 @@
 from torch import nn
-import torch
 
 
 class MBConvBlock(nn.Module):
@@ -30,57 +29,101 @@ class MBConvBlock(nn.Module):
         return out
 
 
-class CRNN_Own_GRU(nn.Module):
+class TemporalBlock2D(nn.Module):
+    """
+    Temporal convolution block using 2D convolutions for Hailo compatibility.
+    Operates on (B, C, 1, T) tensors with kernel (1, k) for temporal processing.
+    """
+
+    def __init__(self, in_channels, out_channels, kernel_size=3, dilation=1):
+        super().__init__()
+        padding = (0, (kernel_size - 1) * dilation // 2)
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=(1, kernel_size),
+                      padding=padding, dilation=(1, dilation), bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=(1, kernel_size),
+                      padding=padding, dilation=(1, dilation), bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+        self.residual = nn.Conv2d(in_channels, out_channels, kernel_size=1) \
+            if in_channels != out_channels else nn.Identity()
+
+    def forward(self, x):
+        return self.conv(x) + self.residual(x)
+
+
+class CRNN_TemporalConv(nn.Module):
     """
     Hailo-compatible CRNN model for wake word detection.
-    Uses temporal convolutions instead of RNN to ensure Hailo compatibility.
+    Uses dilated temporal convolutions (as 2D ops) instead of bidirectional GRU.
+    All operations are 2D to ensure full Hailo compatibility.
+
+    Note: Designed for fixed input shape (1, 40, 100).
     """
 
     def __init__(self, input_shape=None, num_classes=2):
         super().__init__()
 
+        # Same CNN backbone as CRNN_with_MBConv
         self.cnn = nn.Sequential(
             MBConvBlock(1, 16, expansion=4),
             MBConvBlock(16, 32, expansion=4, stride=2),
             MBConvBlock(32, 64, expansion=4, stride=2)
         )
 
-        # Unidirectional GRUs
-        self.gru_fwd = nn.GRU(
-            input_size=64,
-            hidden_size=256,
-            batch_first=True
+        # Reduce frequency dimension to 1 using conv instead of mean
+        self.freq_reduce = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=(10, 1), bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
         )
 
-        self.gru_bwd = nn.GRU(
-            input_size=64,
-            hidden_size=256,
-            batch_first=True
+        # Temporal convolutions with increasing dilation (2D ops with kernel height=1)
+        # Reduced channels to keep parameter count reasonable
+        self.temporal = nn.Sequential(
+            TemporalBlock2D(64, 96, kernel_size=3, dilation=1),
+            TemporalBlock2D(96, 128, kernel_size=3, dilation=2),
+            TemporalBlock2D(128, 128, kernel_size=3, dilation=4),
         )
 
+        # Depthwise separable conv to aggregate temporal dimension (efficient alternative)
+        self.final_conv = nn.Sequential(
+            # Depthwise: process each channel independently across time
+            nn.Conv2d(128, 128, kernel_size=(1, 25), groups=128, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            # Pointwise: mix channels
+            nn.Conv2d(128, 256, kernel_size=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True)
+        )
+
+        # Classifier
         self.fc = nn.Sequential(
-            nn.Linear(512, 64),
+            nn.Flatten(),
+            nn.Linear(256, 64),
             nn.ReLU(),
             nn.Linear(64, num_classes)
         )
 
     def forward(self, x):
-        # CNN-Feature extraction
-        x = self.cnn(x)  # (B, C=64, F, T)
-        x = x.mean(dim=2)  # (B, 64, T)
-        x = x.permute(0, 2, 1)  # (B, T, 64)
+        # CNN feature extraction: (B, 1, F=40, T=100) -> (B, 64, F'=10, T'=25)
+        x = self.cnn(x)
 
-        # Forward-GRU
-        _, h_fwd = self.gru_fwd(x)  # (1, B, 256)
+        # Reduce frequency to 1: (B, 64, 10, 25) -> (B, 64, 1, 25)
+        x = self.freq_reduce(x)
 
-        # Backward-GRU
-        x_rev = torch.flip(x, dims=[1])
-        _, h_bwd = self.gru_bwd(x_rev)  # (1, B, 256)
+        # Temporal convolutions: (B, 64, 1, 25) -> (B, 128, 1, 25)
+        x = self.temporal(x)
 
-        # Summarize Hidden States
-        h_fwd = h_fwd.squeeze(0)  # (B, 256)
-        h_bwd = h_bwd.squeeze(0)  # (B, 256)
-        h = torch.cat([h_fwd, h_bwd], dim=1)  # (B, 512)
+        # Aggregate temporal dimension: (B, 128, 1, 25) -> (B, 256, 1, 1)
+        x = self.final_conv(x)
 
-        out = self.fc(h)
+        # Classification: (B, 256, 1, 1) -> (B, num_classes)
+        out = self.fc(x)
         return out

@@ -59,3 +59,44 @@ architectures like `CRNN_with_MBConv`.
 model = cnn    # Use CNN model
 model = crnn   # Use CRNN model
 ```
+
+## 2025-12-28 - Hailo-Compatible Temporal Convolution Model
+
+**Problem:** The `crnn_own_gru` model (bidirectional GRU implementation) failed to compile for Hailo8L due to
+unsupported `Slice` operation from `torch.flip()`, and the standard `CRNN_with_MBConv` uses bidirectional GRU which
+Hailo also doesn't support well.
+
+**Root Cause:** Hailo's compiler doesn't support:
+- `torch.flip()` (creates unsupported Slice operation in ONNX)
+- 1D convolutions and pooling (`Conv1d`, `AdaptiveAvgPool1d`)
+- `GlobalAveragePool` / `AdaptiveAvgPool2d`
+- RNN/GRU layers
+
+**Solution:** Created `CRNN_TemporalConv` - a fully Hailo-compatible model that replaces bidirectional GRU with dilated
+temporal convolutions:
+
+**Changes:**
+- Replaced `CRNN_Own_GRU` with `CRNN_TemporalConv` in `model/crnn_with_mbconv_non_gru.py`
+- Uses same MBConvBlock CNN backbone as original CRNN
+- Temporal modeling via dilated 2D convolutions (dilation 1, 2, 4) instead of bidirectional GRU
+- Frequency dimension reduced via Conv2d instead of `mean()`
+- Temporal aggregation via depthwise separable conv instead of `GlobalAveragePool`
+- Updated model registry: `crnn_own_gru` renamed to `crnn_temporal`
+
+**Model Comparison:**
+
+| Aspect | Original GRU | Temporal Conv |
+|--------|--------------|---------------|
+| Parameters | 728K | 546K |
+| ONNX ops | Slice (unsupported) | Conv, Add, Relu, Gemm, Flatten |
+| Hailo compatible | No | Yes |
+
+**ONNX Operations Used:** `Add`, `Conv`, `Flatten`, `Gemm`, `Identity`, `Relu` - all fully supported by Hailo.
+
+**Usage:**
+```ini
+# In config.ini [training] section:
+model = crnn_temporal   # Hailo-compatible temporal conv model
+```
+
+**Note:** Model is designed for fixed input shape (1, 40, 100) due to fixed-size temporal aggregation kernel.
