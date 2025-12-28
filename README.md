@@ -20,10 +20,9 @@ system uses a CNN model trained on custom wake word audio and can run real-time 
 - Custom wake word detection using CNN architecture
 - Audio augmentation pipeline with noise, RIR, and pitch/time shift
 - Training with TensorBoard logging and early stopping
-- **Experiment tracking** - Each training run creates a self-contained directory with model, config, and logs
+- Experiment tracking: Each training run creates a self-contained directory with model, config, and logs
 - Export to ONNX and Hailo HEF formats for edge deployment
 - Real-time continuous detection on Raspberry Pi
-- **Manual marking** - Press 's' during runtime to collect missed detections for model refinement
 - Balanced class generation with configurable wakeword ratios
 
 ## Project Structure
@@ -52,8 +51,9 @@ WakeWordDetection/
 ├── recording/                     # Test recordings
 │
 ├── model/                         # Neural network architectures
-│   ├── wake_word_cnn.py          # Main CNN model definition
-│   └── crnn_with_mbconv.py       # Alternative CRNN architecture
+│   ├── wake_word_cnn.py               # Main CNN model definition
+│   └── crnn_with_mbconv.py            # Alternative CRNN architecture
+│   └── crnn_with_mbconv_non_gru.py    # Alternative CRNN architecture with custom GRU implementation for Hailo compiler
 │
 ├── dataset/                       # Dataset loading and processing
 │   ├── wake_word_dataset.py      # PyTorch Dataset class
