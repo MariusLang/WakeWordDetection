@@ -31,6 +31,7 @@ def load_config(path='config.ini'):
     cfg['EARLY_STOPPING_PATIENCE'] = config.getint('training', 'early_stopping_patience')
     cfg['EARLY_STOPPING_MIN_DELTA'] = config.getfloat('training', 'early_stopping_min_delta')
     cfg['WAKEWORD_RATIO'] = config.getfloat('training', 'wakeword_ratio')
+    cfg['MODEL'] = config.get('training', 'model', fallback='cnn')
 
     return cfg
 

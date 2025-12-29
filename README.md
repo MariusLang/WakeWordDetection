@@ -20,6 +20,7 @@ system uses a CNN model trained on custom wake word audio and can run real-time 
 - Custom wake word detection using CNN architecture
 - Audio augmentation pipeline with noise, RIR, and pitch/time shift
 - Training with TensorBoard logging and early stopping
+- Experiment tracking: Each training run creates a self-contained directory with model, config, and logs
 - Export to ONNX and Hailo HEF formats for edge deployment
 - Real-time continuous detection on Raspberry Pi
 - Balanced class generation with configurable wakeword ratios
@@ -41,13 +42,18 @@ WakeWordDetection/
 │   └── rir/                       # Room impulse response files for augmentation
 │
 ├── calibration_data/              # Generated calibration data for Hailo (*.npy files)
-├── trained_models/                # Saved PyTorch model checkpoints
+├── experiments/                   # Training experiments (auto-generated)
+│   └── wakeword_cnn_TIMESTAMP/   # Each training run creates a timestamped directory
+│       ├── model.pt              # Trained PyTorch model checkpoint
+│       ├── config.json           # Training config and results
+│       └── tensorboard/          # TensorBoard event files
+├── detections/                    # Auto-detected wake word recordings (from continuous_wakeword.py)
 ├── recording/                     # Test recordings
-├── runs/                          # TensorBoard logs (auto-generated)
 │
 ├── model/                         # Neural network architectures
-│   ├── wake_word_cnn.py          # Main CNN model definition
-│   └── crnn_with_mbconv.py       # Alternative CRNN architecture
+│   ├── wake_word_cnn.py               # Main CNN model definition
+│   └── crnn_with_mbconv.py            # Alternative CRNN architecture
+│   └── crnn_with_mbconv_non_gru.py    # Alternative CRNN architecture with custom GRU implementation for Hailo compiler
 │
 ├── dataset/                       # Dataset loading and processing
 │   ├── wake_word_dataset.py      # PyTorch Dataset class
@@ -168,14 +174,16 @@ This script:
 
 - Loads audio data from `data/` directory
 - Generates balanced training/validation sets
-- Trains WakeWordCNN model
-- Saves checkpoints to `wakeword_cnn.pt`
-- Logs metrics to TensorBoard (`runs/` directory)
+- Trains WakeWordCNN model with early stopping
+- Creates a timestamped experiment directory: `experiments/wakeword_cnn_TIMESTAMP/`
+    - `model.pt` - Trained model checkpoint
+    - `config.json` - Hyperparameters and results (accuracy, epochs)
+    - `tensorboard/` - TensorBoard event files
 
 **Step 2.2: Monitor Training**
 
 ```bash
-tensorboard --logdir=runs
+tensorboard --logdir=experiments
 ```
 
 Open `http://localhost:6006` to view training metrics.
@@ -253,13 +261,15 @@ python3 continuous_wakeword.py \
     --save-detections
 ```
 
+Press `s` during runtime to manually mark wakewords for collecting training data.
+
 ## Scripts Reference
 
 ### Training Scripts
 
 #### `train_cnn.py`
 
-Main training script for the CNN wake word detector.
+Main training script for the CNN wake word detector with structured experiment tracking.
 
 **Usage:**
 
@@ -272,11 +282,25 @@ python train_cnn.py
 - Loads training data from directories specified in `config.ini`
 - Generates balanced dataset with configurable wakeword ratio
 - Trains CNN model with early stopping
-- Logs metrics to TensorBoard
-- Saves best model to `wakeword_cnn.pt`
+- Creates experiment directory: `experiments/wakeword_cnn_TIMESTAMP/`
+    - `model.pt` - Trained model weights
+    - `config.json` - Training configuration and final results
+    - `tensorboard/` - TensorBoard event files
 - Displays confusion matrix after training
 
+**Output structure:**
+
+```
+experiments/
+└── wakeword_cnn_20251212_163045/
+    ├── model.pt              # Trained model
+    ├── config.json           # Hyperparameters + results
+    └── tensorboard/          # TensorBoard logs
+```
+
 **Configuration:** Edit `config.ini` to change training parameters.
+
+**Viewing results:** Use `tensorboard --logdir=experiments` to compare all training runs in one view.
 
 ### Inference Scripts
 
@@ -317,7 +341,7 @@ python3 rpi_wakeword.py path/to/audio.wav [--hef wakeword.hef]
 
 #### `continuous_wakeword.py`
 
-Real-time continuous wake word detection using microphone.
+Real-time continuous wake word detection using microphone with manual marking capability.
 
 **Usage:**
 
@@ -337,6 +361,21 @@ python3 continuous_wakeword.py \
 - `--cooldown`: Seconds between detections (default: 2.0)
 - `--save-detections`: Save detected audio clips
 - `--detection-dir`: Directory for saved detections (default: `detections`)
+
+**Manual Marking:**
+
+While the script is running, press `s` to manually mark that a wakeword was just spoken. This saves a 3-second audio
+clip (capturing audio before the keypress) for model refinement. Files are saved as:
+
+- Auto-detected: `detection_TIMESTAMP_prob0.XXX_ratio0.XXX_####.wav`
+- Manual marks: `manual_TIMESTAMP_####.wav`
+
+Use manual marks to collect edge cases where the model missed detections, then feed them back into training to improve
+accuracy.
+
+**Microphone Configuration for Raspberry Pi:**
+
+
 
 ### Data Preparation Scripts
 
