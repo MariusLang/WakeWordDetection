@@ -73,16 +73,22 @@ WakeWordDetection/
 │   ├── data_processing.py        # Data generation utilities
 │   └── get_device.py             # Device detection
 │
+├── detection/                     # Detection and inference scripts
+│   ├── base_detector.py          # Base class with shared detection logic
+│   ├── pytorch/                  # PyTorch-based detection (Mac/CUDA/CPU)
+│   │   ├── pytorch_detector.py   # Continuous detection
+│   │   └── pytorch_inference.py  # File-based inference
+│   └── hailo/                    # Hailo-based detection (Raspberry Pi)
+│       ├── hailo_detector.py     # Continuous detection
+│       └── hailo_inference.py    # File-based inference
+│
 ├── data_preparation/              # Data preparation scripts
 │   ├── download_non_wakeword.py  # Download Google Speech Commands dataset
 │   └── augment_audio.py          # Audio augmentation pipeline
 │
 ├── train_cnn.py                   # Main training script
-├── inference.py                   # PyTorch inference on audio files
 ├── generate_calibration_data.py  # Generate calibration data for Hailo
-├── pytorch_to_hailo.py           # Convert PyTorch → ONNX
-├── rpi_wakeword.py               # Hailo HEF inference on Raspberry Pi
-└── continuous_wakeword.py        # Real-time detection with microphone
+└── pytorch_to_hailo.py           # Convert PyTorch → ONNX
 ```
 
 ## Prerequisites
@@ -191,7 +197,7 @@ Open `http://localhost:6006` to view training metrics.
 **Step 2.3: Test Inference**
 
 ```bash
-python inference.py path/to/test_audio.wav
+python -m detection.pytorch.pytorch_inference path/to/test_audio.wav
 ```
 
 Tests the trained PyTorch model on an audio file.
@@ -248,17 +254,16 @@ git ls-files | rsync -av --files-from=- ./ pi@<raspberry-pi-ip>:/home/pi/WakeWor
 ```bash
 ssh pi@<raspberry-pi-ip>
 cd WakeWordDetection
-python3 rpi_wakeword.py recording/test_audio.wav
+python3 -m detection.hailo.hailo_inference recording/test_audio.wav
 ```
 
 **Step 4.3: Run Continuous Detection**
 
 ```bash
-python3 continuous_wakeword.py \
+python3 -m detection.hailo.hailo_detector \
     --hef wakeword.hef \
     --threshold 0.2 \
-    --cooldown 2.0 \
-    --save-detections
+    --cooldown 2.0
 ```
 
 Press `s` during runtime to manually mark wakewords for collecting training data.
@@ -302,17 +307,26 @@ experiments/
 
 **Viewing results:** Use `tensorboard --logdir=experiments` to compare all training runs in one view.
 
-### Inference Scripts
+### Detection Scripts
 
-#### `inference.py`
+All detection and inference scripts are organized in `detection/` with separate directories for PyTorch
+(Mac/CUDA/CPU) and Hailo (Raspberry Pi).
+
+#### PyTorch Inference (`detection/pytorch/pytorch_inference.py`)
 
 Test PyTorch model inference on audio files.
 
 **Usage:**
 
 ```bash
-python inference.py path/to/audio.wav
+python -m detection.pytorch.pytorch_inference path/to/audio.wav --model wakeword_cnn.pt
 ```
+
+**Arguments:**
+
+- `audio_file`: Path to WAV file
+- `--model`: Path to model .pt file or experiment directory (default: `wakeword_cnn.pt`)
+- `--threshold`: Detection threshold (default: 0.2)
 
 **Output:**
 
@@ -321,36 +335,60 @@ Created 15 segments from file.
 --- WakeWord Detection ---
 Max wakeword prob: 0.956
 Frames predicted as wakeword: 3/4
- WAKEWORD DETECTED
+WAKEWORD DETECTED
 ```
 
-#### `rpi_wakeword.py`
+#### Hailo Inference (`detection/hailo/hailo_inference.py`)
 
 Run Hailo HEF model inference on Raspberry Pi.
 
 **Usage:**
 
 ```bash
-python3 rpi_wakeword.py path/to/audio.wav [--hef wakeword.hef]
+python3 -m detection.hailo.hailo_inference path/to/audio.wav --hef wakeword.hef
 ```
 
 **Arguments:**
 
 - `audio_file`: Path to WAV file
 - `--hef`: Path to HEF model (default: `wakeword.hef`)
+- `--threshold`: Detection threshold (default: 0.2)
 
-#### `continuous_wakeword.py`
+#### PyTorch Continuous Detection (`detection/pytorch/pytorch_detector.py`)
 
-Real-time continuous wake word detection using microphone with manual marking capability.
+Real-time continuous wake word detection using PyTorch (for Mac/CUDA/CPU).
 
 **Usage:**
 
 ```bash
-python3 continuous_wakeword.py \
+python -m detection.pytorch.pytorch_detector \
+    --model wakeword_cnn.pt \
+    --threshold 0.2 \
+    --cooldown 2.0 \
+    --detection-dir detections
+```
+
+**Arguments:**
+
+- `--model`: Path to .pt/.pth state_dict or checkpoint (required)
+- `--model-name`: Force architecture (cnn, crnn, crnn_temporal)
+- `--threshold`: Detection probability threshold (default: 0.2)
+- `--cooldown`: Seconds between detections (default: 2.0)
+- `--no-save`: Do not save detection audio files
+- `--detection-dir`: Directory for saved detections (default: `detections`)
+- `--device`: Force device (cpu, mps, cuda)
+
+#### Hailo Continuous Detection (`detection/hailo/hailo_detector.py`)
+
+Real-time continuous wake word detection using Hailo accelerator (Raspberry Pi).
+
+**Usage:**
+
+```bash
+python3 -m detection.hailo.hailo_detector \
     --hef wakeword.hef \
     --threshold 0.2 \
     --cooldown 2.0 \
-    --save-detections \
     --detection-dir detections
 ```
 
@@ -359,10 +397,10 @@ python3 continuous_wakeword.py \
 - `--hef`: Path to HEF model (default: `wakeword.hef`)
 - `--threshold`: Detection probability threshold (default: 0.2)
 - `--cooldown`: Seconds between detections (default: 2.0)
-- `--save-detections`: Save detected audio clips
+- `--no-save`: Do not save detection audio files
 - `--detection-dir`: Directory for saved detections (default: `detections`)
 
-**Manual Marking:**
+**Manual Marking (both detectors):**
 
 While the script is running, press `s` to manually mark that a wakeword was just spoken. This saves a 3-second audio
 clip (capturing audio before the keypress) for model refinement. Files are saved as:
@@ -509,13 +547,13 @@ git ls-files | rsync -av --files-from=- ./ pi@192.168.178.194:/home/pi/WakeWordD
 1. **Test with audio file:**
 
 ```bash
-python3 rpi_wakeword.py recording/test.wav
+python3 -m detection.hailo.hailo_inference recording/test.wav
 ```
 
 2. **Continuous detection:**
 
 ```bash
-python3 continuous_wakeword.py --threshold 0.2 --save-detections
+python3 -m detection.hailo.hailo_detector --threshold 0.2
 ```
 
 ## Performance

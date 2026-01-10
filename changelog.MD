@@ -1,6 +1,13 @@
 Change log to collect all experimentation (such as dataset changes, amount of augmentation, trainingset size, ratio of
 wakeword to non-wakeword etc.) for easier reporting at the end of our project.
 
+## 2025-01-10 - Refactored Detection Scripts into Modular Structure
+
+**Changes:**
+
+- Created a separate inference script for non hailo devices
+- Refactored the inference code. Moved everything to the `/detections` directory
+
 ## 2025-12-12 - Manual Marking Feature for Model Refinement
 
 **Investigation Goal:** Refine the wake word detection model by collecting audio samples through manual marking.
