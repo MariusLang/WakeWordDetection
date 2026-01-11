@@ -6,7 +6,13 @@ import configparser
 from utils.audio_processing import compute_mel_spectrogram
 
 
-def load_config(path='config.ini'):
+def load_config(path=None):
+    if path is None:
+        # Find config.ini relative to project root
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        path = os.path.join(project_root, 'config.ini')
+
     config = configparser.ConfigParser()
     config.read(path)
 
