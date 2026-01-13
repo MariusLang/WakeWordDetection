@@ -150,7 +150,11 @@ Downloads Google Speech Commands dataset (~2GB) to `data/non_wakeword/`. You can
 python script.
 
 **Step 1.3: Augment Wake Word Data**
-
+---
+**ATTENTION:** 
+- You must download the short noise samples manually (for example from https://freesound.org/) and place them in the folder `data_preparation/noises/short`.
+If you don’t need short‑noise augmentation, you can leave this folder empty.
+- Background noise samples were downloaded automatically.
 ```bash
 python data_preparation/augment_audio.py \
     --wakeword_in data/wakeword \
@@ -159,6 +163,17 @@ python data_preparation/augment_audio.py \
     --rir data/rir \
     --num_augmentations 100 \
     --normalize peak
+```
+Same for Windows
+```bash
+python data_preparation/augment_audio.py `
+    -i data/wakeword `
+    -o data/wakeword_augmented `
+    --noise-dir data/noise `
+    --rir-dir data/rir `
+    --num-aug 100 `
+    --normalize-method peak
+
 ```
 
 Generates augmented samples with:

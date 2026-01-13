@@ -59,8 +59,34 @@ def flatten_structure():
             os.rmdir(nested)
 
 
+import os
+import shutil
+
+def prepare_noise_folders():
+
+    src_background = os.path.join(DATA_DIR, "_background_noise_")
+    dst_base = "../data_preparation/noises"
+    dst_background = os.path.join(dst_base, "background")
+    dst_short = os.path.join(dst_base, "short")
+
+    os.makedirs(dst_background, exist_ok=True)
+    os.makedirs(dst_short, exist_ok=True)
+
+    if not os.path.exists(src_background):
+        raise FileNotFoundError(f"Source folder not found: {src_background}")
+
+    for filename in os.listdir(src_background):
+        if filename.lower().endswith(".wav"):
+            src_file = os.path.join(src_background, filename)
+            dst_file = os.path.join(dst_background, filename)
+            shutil.copy2(src_file, dst_file)
+    print("Background noises copied.")
+    print("ATTENTION!!!: Short noises you should download manually, and put it to the folder: ",dst_short,"\nIf you don't need short noises data augmentation, just skip it.")
+
+
 if __name__ == '__main__':
     download_dataset()
     extract_nonwakeword()
     flatten_structure()
+    prepare_noise_folders()
     print('Successfully downloaded non-wake word data.')
