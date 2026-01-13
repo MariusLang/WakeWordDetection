@@ -200,3 +200,4 @@ data_preparation/speech_commands.tar.gz
 data_preparation/WWD_test.ipynb
 data/
 utils/__pycache__/
+model/__pycache__/
