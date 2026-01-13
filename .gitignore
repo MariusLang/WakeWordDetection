@@ -1,6 +1,7 @@
 .idea/
 datasets/
-recording/datasets/
+
+
 # Created by https://www.toptal.com/developers/gitignore/api/pycharm,macos,windows
 # Edit at https://www.toptal.com/developers/gitignore?templates=pycharm,macos,windows
 
@@ -192,9 +193,11 @@ recording/
 
 # Other
 
+recording/datasets/
 WWD_model_train.ipynb
+WWD_test.ipynb
 tf-env/
 data_preparation/speech_commands.tar.gz
-WWD_test.ipynb
 data_preparation/WWD_test.ipynb
-utils/__pycache__/audio_processing.cpython-310.pyc
+data/
+utils/__pycache__/

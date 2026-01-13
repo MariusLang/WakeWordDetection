@@ -450,6 +450,16 @@ python data_preparation/augment_audio.py \
     --normalize peak \
     --workers 4
 ```
+Same for Windows
+```bash
+python data_preparation/augment_audio.py `
+    --input data/wakeword `
+    --output data/wakeword_augmented `
+    --noise-dir data/noise `
+    --rir-dir data/rir `
+    --num-aug 100 `
+    --normalize-method peak
+```
 
 **Arguments:**
 
