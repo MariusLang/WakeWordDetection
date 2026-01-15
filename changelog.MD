@@ -107,3 +107,20 @@ model = crnn_temporal   # Hailo-compatible temporal conv model
 ```
 
 **Note:** Model is designed for fixed input shape (1, 40, 100) due to fixed-size temporal aggregation kernel.
+
+## 2026-01-13 - Implemented Natural Noise Augmentation
+**Problem:** The `generate_synthetic_noises` generates non-natural noise. 
+
+**Root Cause:**
+- Microphone doesn't generate Gaussian noise. 
+- Dataset doesn't correspond to the real usage samples
+
+**Solution:** 
+Load real noise samples instead of generate synthetic noise
+
+**Changes:**
+- Added folder with real noise samples: `data_preparation/noises`
+- Created function `add_natural_noise` in `data_preparation/augment_audio.py`. It loads real noise samples and mix it to source_sample
+- Changed function `random_augmentation`: 
+- + commented old `add_noise` function
+- + added new `add_natural_noise` function

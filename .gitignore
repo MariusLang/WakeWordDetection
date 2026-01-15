@@ -1,7 +1,6 @@
 .idea/
 datasets/
-WWD_model_train.ipynb
-tf-env/
+
 
 # Created by https://www.toptal.com/developers/gitignore/api/pycharm,macos,windows
 # Edit at https://www.toptal.com/developers/gitignore?templates=pycharm,macos,windows
@@ -190,3 +189,16 @@ runs/
 *.hef
 detections/
 recording/
+
+# Other
+
+recording/datasets/
+WWD_model_train.ipynb
+WWD_test.ipynb
+tf-env/
+data_preparation/speech_commands.tar.gz
+data_preparation/WWD_test.ipynb
+data/
+utils/__pycache__/
+model/__pycache__/
+data_preparation/noises

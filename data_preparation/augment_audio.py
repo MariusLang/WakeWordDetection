@@ -14,6 +14,8 @@ from tqdm import tqdm
 import librosa
 import numpy as np
 from scipy.signal import fftconvolve
+from audiomentations import AddBackgroundNoise, PolarityInversion, AddShortNoises
+from pathlib import Path
 
 # Add parent directory to path to import from utils
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -68,6 +70,45 @@ def add_noise(x, noise, snr_db):
 
     return x + noise_scaled
 
+def has_wav(dir_path: str) -> bool:
+    p = Path(dir_path)
+    if not p.exists() or not p.is_dir():
+        return False
+    return any(f.is_file() and f.suffix.lower() == ".wav" for f in p.rglob("*"))
+
+
+def add_natural_noise(x, sr=16000):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    noises_dir = os.path.join(base_dir, "noises")
+
+    noises_background_dir = os.path.join(noises_dir, "background")
+    noised_x = x.copy()
+
+    if has_wav(noises_background_dir):
+        background_transform = AddBackgroundNoise(
+            sounds_path=noises_background_dir, #load random noise from folder WakeWordDetection/data_preparation/noises
+            min_snr_db=0.0,
+            max_snr_db=10.0,
+            noise_transform=PolarityInversion(),
+            p=1.0
+        )
+        noised_x = background_transform(x, sample_rate=sr)
+
+    short_noises_dir = os.path.join(noises_dir, "short")
+    if has_wav(short_noises_dir):
+        short_transform = AddShortNoises(
+            sounds_path=short_noises_dir,
+            min_snr_db=0.0,
+            max_snr_db=30.0,
+            noise_rms="relative",
+            min_time_between_sounds=0.25,
+            max_time_between_sounds=1.0,
+            noise_transform=PolarityInversion(),
+            p=1.0
+        )
+        noised_x = short_transform(noised_x, sample_rate=sr)
+    return noised_x
+
 
 def time_stretch(x, rate):
     return librosa.effects.time_stretch(x, rate=rate)
@@ -95,10 +136,13 @@ def reverb(x, rir):
 def random_augmentation(x, sr, noises, rirs):
     x_aug = x.copy()
 
+    #if random.random() < 0.7:
+    #    noise = random.choice(noises)
+    #    snr = random.uniform(0, 25)
+    #    x_aug = add_noise(x_aug, noise, snr)
+
     if random.random() < 0.7:
-        noise = random.choice(noises)
-        snr = random.uniform(0, 25)
-        x_aug = add_noise(x_aug, noise, snr)
+        x_aug = add_natural_noise(x_aug, sr)
 
     if random.random() < 0.5:
         rate = random.uniform(0.85, 1.15)
