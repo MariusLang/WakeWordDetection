@@ -46,6 +46,17 @@ Two pre-trained experiments are included in the repository for reference (not ye
 
 These can be used to test inference without training your own model.
 
+## Visualization Notebook
+
+The `visualize_wakeword.ipynb` notebook provides visualization and testing of the results:
+
+- Load and play audio test files
+- Display mel spectrograms
+- Run inference with a selected model
+- View per-segment predictions and wakeword probability ratios
+
+Useful for understanding model behavior and debugging classification results.
+
 ## Monitor Training
 
 ```bash
