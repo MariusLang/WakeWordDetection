@@ -8,10 +8,9 @@ This process converts your PyTorch model to a Hailo HEF (Hailo Executable Format
 accelerator:
 
 ```
-PyTorch (.pt) → ONNX (.onnx) → HAR (Hailo Archive) → Optimized HAR → HEF (Hailo Executable)
+PyTorch (.pt) -> ONNX (.onnx) -> HAR (Hailo Archive) -> Optimized HAR -> HEF (Hailo Executable)
 ```
 
-**Time Required**: ~10-15 minutes
 **Prerequisites**:
 
 - Trained PyTorch model (`wakeword_cnn.pt`)
