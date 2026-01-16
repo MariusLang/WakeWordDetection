@@ -182,7 +182,6 @@ $RECYCLE.BIN/
 /calibration_data/
 
 # Training outputs
-experiments/
 runs/
 *.pt
 *.onnx
