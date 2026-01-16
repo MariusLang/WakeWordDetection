@@ -323,53 +323,51 @@ if __name__ == '__main__':
         epilog='''
 Examples:
   # Basic usage with peak normalization (matches training preprocessing)
-  python augment_audio.py -i data/wakeword -o data/wakeword_augmented
+  python augment_audio.py --in data/wakeword --out data/wakeword_augmented
 
   # Limit to ~1000 output files by randomly sampling input files
-  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --max-output-files 1000
+  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --max_output_files 1000
 
   # Use RMS normalization instead
-  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --normalize-method rms --target-level 0.1
+  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --normalize rms --target_level 0.1
 
   # Disable normalization (not recommended - may cause volume bias)
-  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --no-normalize
+  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --normalize none
 
   # Process with 4 workers and fewer augmentations for testing
-  python augment_audio.py -i data/wakeword -o data/wakeword_augmented -j 4 --num-aug 50
+  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --workers 4 --num_augmentations 50
 
   # Quick test: generate only 100 files with 10 augmentations each
-  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --max-output-files 100 --num-aug 10 -j 4
+  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --max_output_files 100 --num_augmentations 10 --workers 4
         '''
     )
-    parser.add_argument('-i', '--input', required=True, help='Input directory containing audio files')
-    parser.add_argument('-o', '--output', required=True, help='Output directory for augmented files')
-    parser.add_argument('--noise-dir', default='data/noise',
+    parser.add_argument('-i', '--in', dest='wakeword_in', required=True, help='Input directory containing audio files')
+    parser.add_argument('-o', '--out', dest='wakeword_out', required=True, help='Output directory for augmented files')
+    parser.add_argument('--noise', default='data/noise',
                         help='Directory containing noise files (default: data/noise)')
-    parser.add_argument('--rir-dir', default='data/rir', help='Directory containing RIR files (default: data/rir)')
-    parser.add_argument('--num-aug', type=int, default=200, help='Number of augmentations per file (default: 200)')
+    parser.add_argument('--rir', default='data/rir', help='Directory containing RIR files (default: data/rir)')
+    parser.add_argument('--num_augmentations', type=int, default=200, help='Number of augmentations per file (default: 200)')
     parser.add_argument('--sr', type=int, default=16000, help='Sample rate (default: 16000)')
-    parser.add_argument('-j', '--jobs', type=int, default=None,
+    parser.add_argument('--workers', type=int, default=None,
                         help='Number of parallel workers (default: number of CPU cores)')
-    parser.add_argument('--normalize-method', choices=['peak', 'rms'], default='peak',
-                        help='Normalization method: peak (matches training) or rms (default: peak)')
-    parser.add_argument('--target-level', type=float, default=1.0,
+    parser.add_argument('--normalize', choices=['peak', 'rms', 'none'], default='peak',
+                        help='Normalization method: peak (matches training), rms, or none (default: peak)')
+    parser.add_argument('--target_level', type=float, default=1.0,
                         help='Target level for normalization: 1.0 for peak, 0.1 for rms (default: 1.0)')
-    parser.add_argument('--no-normalize', action='store_true',
-                        help='Disable input normalization (NOT RECOMMENDED - may cause volume bias)')
-    parser.add_argument('--max-output-files', type=int, default=None,
+    parser.add_argument('--max_output_files', type=int, default=None,
                         help='Maximum number of output files to generate. If specified, randomly samples input files uniformly.')
 
     args = parser.parse_args()
 
-    input_dir = args.input
-    out_dir = args.output
-    noise_dir = args.noise_dir
-    rir_dir = args.rir_dir
-    num_augmentations = args.num_aug
+    input_dir = args.wakeword_in
+    out_dir = args.wakeword_out
+    noise_dir = args.noise
+    rir_dir = args.rir
+    num_augmentations = args.num_augmentations
     sr = args.sr
-    num_workers = args.jobs if args.jobs is not None else cpu_count()
-    normalize_input = not args.no_normalize
-    normalize_method = args.normalize_method
+    num_workers = args.workers if args.workers is not None else cpu_count()
+    normalize_input = args.normalize != 'none'
+    normalize_method = args.normalize if args.normalize != 'none' else 'peak'
     target_level = args.target_level
     max_output_files = args.max_output_files
 

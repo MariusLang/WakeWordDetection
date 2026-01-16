@@ -3,10 +3,6 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 
-# ============================================================================
-# AUDIO NORMALIZATION FUNCTIONS
-# ============================================================================
-
 def normalize_peak(x, target_peak=1.0):
     """
     Normalize audio to target peak level.
@@ -47,10 +43,6 @@ def normalize_rms(x, target_rms=0.1):
         return x * (target_rms / current_rms)
     return x
 
-
-# ============================================================================
-# MEL SPECTROGRAM COMPUTATION
-# ============================================================================
 
 def compute_mel_spectrogram(fn, sr, n_fft, hop, n_mels):
     """
@@ -119,10 +111,6 @@ def compute_mel_spectrogram_from_audio(audio_data, sr, n_fft, hop, n_mels):
     return mel_db
 
 
-# ============================================================================
-# SEGMENT NORMALIZATION
-# ============================================================================
-
 def normalize_segments(X):
     """
     Normalize mel spectrogram segments using StandardScaler.
@@ -143,10 +131,6 @@ def normalize_segments(X):
         X_norm[i] = scaler.fit_transform(X[i])
     return X_norm
 
-
-# ============================================================================
-# PREPROCESSING FOR INFERENCE
-# ============================================================================
 
 def preprocess_audio_file(fn, cfg):
     """
