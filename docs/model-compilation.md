@@ -4,14 +4,15 @@ Complete step-by-step guide to compile your PyTorch wake word model for the Hail
 
 ## Overview
 
-This process converts your PyTorch model to a Hailo HEF (Hailo Executable Format) file that can run on the Hailo-8L accelerator:
+This process converts your PyTorch model to a Hailo HEF (Hailo Executable Format) file that can run on the Hailo-8L
+accelerator:
 
 ```
-PyTorch (.pt) → ONNX (.onnx) → HAR (Hailo Archive) → Optimized HAR → HEF (Hailo Executable)
+PyTorch (.pt) -> ONNX (.onnx) -> HAR (Hailo Archive) -> Optimized HAR -> HEF (Hailo Executable)
 ```
 
-**Time Required**: ~10-15 minutes
 **Prerequisites**:
+
 - Trained PyTorch model (`wakeword_cnn.pt`)
 - Calibration data generated (`calibration_data/`)
 - Hailo Docker container set up on compilation PC
@@ -31,6 +32,7 @@ python3 generate_calibration_data.py --num-samples 50
 **Output**: Creates `calibration_data/` directory with 50 `.npy` files (shape: 40, 100, 1)
 
 **Verify calibration data**:
+
 ```bash
 python3 -c "import numpy as np; sample = np.load('calibration_data/sample_0000.npy'); print(f'Shape: {sample.shape}, Expected: (40, 100, 1)')"
 ```
@@ -51,6 +53,7 @@ python3 pytorch_to_hailo.py \
 ```
 
 **Parameters**:
+
 - `--pt`: Path to PyTorch model
 - `--onnx`: Output ONNX filename
 - `--shape`: Input shape (batch, channels, height, width)
@@ -58,6 +61,7 @@ python3 pytorch_to_hailo.py \
 - `--skip_hef`: Only export ONNX, don't compile HEF yet
 
 **Verify ONNX export**:
+
 ```bash
 python3 -c "import onnx; model = onnx.load('experiments/wakeword_model_20251212_175450/model.onnx'); print('Inputs:', [(inp.name, [d.dim_value for d in inp.type.tensor_type.shape.dim]) for inp in model.graph.input]); print('Outputs:', [(out.name, [d.dim_value for d in out.type.tensor_type.shape.dim]) for out in model.graph.output])"
 ```
@@ -78,6 +82,7 @@ rsync -av calibration_data \
 ```
 
 **Replace**:
+
 - `marius@192.168.178.62` with your compilation PC's username@IP
 - Path with your Hailo Docker shared directory path
 
@@ -88,6 +93,7 @@ rsync -av experiments/wakeword_model_20251212_175450/model.onnx marius@192.168.1
 ```
 
 **Verify transfer**:
+
 ```bash
 ssh marius@192.168.178.62 "ls -lh ~/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/"
 ```
@@ -104,16 +110,19 @@ cd ~/Downloads/hailo8_ai_sw_suite_2025-10_docker
 ```
 
 You should see:
+
 ```
 Welcome to Hailo AI Software Suite Container
 ```
 
 **Inside the container**, navigate to shared directory:
+
 ```bash
 cd /local/shared_with_docker/
 ```
 
 **Verify files are present**:
+
 ```bash
 ls -lh model.onnx
 ls calibration_data/*.npy | wc -l  # Should show 50
@@ -130,6 +139,7 @@ hailo parser onnx model.onnx --hw-arch hailo8l
 ```
 
 **Expected output**:
+
 ```
 [info] Translation completed on ONNX model wakeword (completion time: 00:00:00.05)
 [info] Saved HAR to: /local/shared_with_docker/wakeword.har
@@ -154,6 +164,7 @@ hailo optimize model.har \
 If you get `PermissionError: [Errno 13] Permission denied: calibration_data/sample_XXXX.npy`:
 
 **Fix permissions**:
+
 ```bash
 sudo chown -R hailo:ht calibration_data
 ```
@@ -172,9 +183,11 @@ Calibration: 100%|████████████████████�
 [info] Saved HAR to: /local/shared_with_docker/wakeword_optimized.har
 ```
 
-**Note**: The warning about calibration data normalization is expected and safe to ignore (we normalize in preprocessing).
+**Note**: The warning about calibration data normalization is expected and safe to ignore (we normalize in
+preprocessing).
 
 **What this does**:
+
 - Quantizes weights from FP32 to INT8
 - Collects statistics from calibration data
 - Applies bias correction
@@ -207,6 +220,7 @@ hailo compiler model_optimized.har --hw-arch hailo8l
 ```
 
 **Resource utilization**:
+
 ```
 | Cluster   | Control | Compute | Memory |
 |-----------|---------|---------|--------|
@@ -216,12 +230,14 @@ hailo compiler model_optimized.har --hw-arch hailo8l
 ```
 
 **Verify HEF was created**:
+
 ```bash
 ls -lh wakeword.hef
 # Should show ~877KB file
 ```
 
 **What this does**:
+
 - Maps model layers to Hailo-8L hardware clusters
 - Compiles kernels
 - Generates final executable format
@@ -239,6 +255,7 @@ rsync -avz \
 ```
 
 **Verify transfer**:
+
 ```bash
 ls -lh model.hef
 # Should show ~877KB file
@@ -256,6 +273,7 @@ rsync -av experiments/wakeword_model_20251212_175450/model.hef \
 ```
 
 **Replace**:
+
 - `pi@192.168.178.194` with your Raspberry Pi's username@IP
 
 ### 9.2 Sync Code Files
@@ -268,12 +286,14 @@ git ls-files | rsync -av --files-from=- ./ \
 ```
 
 **Or manually sync specific directories**:
+
 ```bash
 rsync -av --exclude '.venv' --exclude '__pycache__' --exclude 'data' \
     ./ pi@192.168.178.192:/home/pi/WakeWordDetection/
 ```
 
 **What this includes**:
+
 - `rpi_wakeword.py` - Inference script
 - `utils/` - Audio processing utilities
 - `config.ini` - Configuration file
@@ -303,6 +323,7 @@ python3 rpi_wakeword.py path/to/test_audio.wav
 ```
 
 **Example**:
+
 ```bash
 python3 rpi_wakeword.py recording/recording_20251121_220537.wav
 ```
@@ -335,6 +356,7 @@ Frames predicted as wakeword: 12/15
 **Cause**: Docker user doesn't have permission to read calibration files.
 
 **Fix**:
+
 ```bash
 sudo chown -R hailo:ht calibration_data
 ```
@@ -344,6 +366,7 @@ sudo chown -R hailo:ht calibration_data
 **Cause**: Calibration data shape doesn't match model input.
 
 **Fix**: Regenerate calibration data:
+
 ```bash
 # On Mac
 python3 generate_calibration_data.py --num-samples 50
@@ -356,6 +379,7 @@ Verify shape is `(40, 100, 1)` (HWC format).
 **Cause**: Using old command syntax.
 
 **Fix**: Remove `--batch-size` and `--compression-level` flags:
+
 ```bash
 hailo compiler wakeword_optimized.har --hw-arch hailo8l
 ```
@@ -363,11 +387,13 @@ hailo compiler wakeword_optimized.har --hw-arch hailo8l
 ### Issue: "No Hailo device found" on Raspberry Pi
 
 **Check device**:
+
 ```bash
 lspci | grep Hailo
 ```
 
 **Check HailoRT**:
+
 ```bash
 python3 -c "from hailo_platform import VDevice; print('HailoRT OK')"
 ```
@@ -382,68 +408,10 @@ python3 -c "from hailo_platform import VDevice; print('HailoRT OK')"
 2. **Check calibration data represents real use case** (balanced classes, diverse samples)
 
 3. **Verify preprocessing matches training**:
-   - Per-segment StandardScaler normalization
-   - 16kHz sample rate
-   - 40 mel bands
-   - 100-frame segments
-
----
-
-## Quick Reference: Full Pipeline
-
-```bash
-# === ON MAC ===
-# 1. Generate calibration data
-python3 generate_calibration_data.py --num-samples 50
-
-# 2. Export to ONNX
-python3 pytorch_to_hailo.py --pt wakeword_cnn.pt --onnx wakeword.onnx \
-    --shape 1 1 40 100 --hw hailo8l --skip_hef
-
-# 3. Transfer to Hailo PC
-rsync -av calibration_data marius@192.168.178.62:~/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/
-rsync -av wakeword.onnx marius@192.168.178.62:~/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/
-
-# === ON HAILO COMPILATION PC ===
-cd ~/Downloads/hailo8_ai_sw_suite_2025-10_docker
-./hailo_ai_sw_suite_docker_run.sh --resume
-
-# Inside Docker:
-cd /local/shared_with_docker/
-sudo chown -R hailo:ht calibration_data  # Fix permissions
-
-hailo parser onnx wakeword.onnx --hw-arch hailo8l
-hailo optimize wakeword.har --calib-set-path calibration_data/ --hw-arch hailo8l
-hailo compiler wakeword_optimized.har --hw-arch hailo8l
-
-# === BACK ON MAC ===
-# 4. Transfer HEF back
-rsync -avz marius@192.168.178.62:~/Downloads/hailo8_ai_sw_suite_2025-10_docker/shared_with_docker/wakeword.hef ./
-
-# 5. Deploy to Raspberry Pi
-rsync -av wakeword.hef pi@192.168.178.194:/home/pi/WakeWordDetection/
-git ls-files | rsync -av --files-from=- ./ pi@192.168.178.194:/home/pi/WakeWordDetection/
-
-# === ON RASPBERRY PI ===
-# 6. Run inference
-python3 rpi_wakeword.py path/to/audio.wav
-```
-
----
-
-## Files Generated
-
-| File | Size | Description |
-|------|------|-------------|
-| `wakeword.onnx` | ~550 KB | ONNX model (portable format) |
-| `wakeword.har` | ~580 KB | Hailo Archive (parsed) |
-| `wakeword_optimized.har` | ~3.5 MB | Optimized HAR (quantized) |
-| `wakeword_compiled.har` | ~4.4 MB | Compiled HAR (with mappings) |
-| `wakeword.hef` | ~877 KB | **Final Hailo Executable** |
-
-Only `wakeword.hef` is needed for deployment on Raspberry Pi.
-
----
+    - Per-segment StandardScaler normalization
+    - 16kHz sample rate
+    - 40 mel bands
+    - 100-frame segments
 
 ## Model Information
 
@@ -466,6 +434,7 @@ Output layers SNR: wakeword/output_layer1 SNR: 44.04 dB
 ```
 
 **SNR Interpretation**:
+
 - **> 40 dB**: Excellent quantization quality
 - **30-40 dB**: Good quality
 - **< 30 dB**: May need more calibration data or different optimization

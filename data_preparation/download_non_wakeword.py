@@ -4,7 +4,7 @@ import tarfile
 import shutil
 
 DATA_DIR = '../data/non_wakeword'
-URL = 'https://download.tensorflow.org/data/speech_commands_v0.02.tar.gz'
+URL = 'http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz'
 ARCHIVE = 'speech_commands.tar.gz'
 
 NON_WAKE_CLASSES = [
