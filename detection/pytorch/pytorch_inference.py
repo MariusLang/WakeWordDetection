@@ -66,8 +66,17 @@ def load_model_from_path(model_path: str, device: torch.device):
             model_arch = 'cnn'
     else:
         pt_path = model_path
-        model_arch = infer_model_arch_from_path(model_path)
-        print(f'Inferred model architecture from filename: {model_arch}')
+        parent_dir = os.path.dirname(model_path)
+        config_path = os.path.join(parent_dir, 'config.json')
+
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                exp_config = json.load(f)
+                model_arch = exp_config.get('model_architecture', 'cnn')
+                print(f'Detected model architecture from config.json: {model_arch}')
+        else:
+            model_arch = infer_model_arch_from_path(model_path)
+            print(f'Inferred model architecture from filename: {model_arch}')
 
     model = get_model(model_arch, input_shape, num_classes).to(device)
     model.load_state_dict(torch.load(pt_path, map_location=device))
