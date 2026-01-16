@@ -11,7 +11,8 @@
 python train_cnn.py
 ```
 
-This loads data, generates a balanced dataset, trains with early stopping, and creates an experiment directory: `experiments/wakeword_model_TIMESTAMP/` containing `model.pt`, `config.json`, and TensorBoard logs.
+This loads data, generates a balanced dataset, trains with early stopping, and creates an experiment directory:
+`experiments/wakeword_model_TIMESTAMP/` containing `model.pt`, `config.json`, and TensorBoard logs.
 
 ## Monitor Training
 
@@ -23,11 +24,11 @@ Open `http://localhost:6006` to view loss curves and accuracy metrics.
 
 ## Model Architectures
 
-| Architecture | Description | Best For |
-|--------------|-------------|----------|
-| `cnn` | Simple CNN (3 conv, 2 FC) | General use, fastest |
-| `crnn` | CNN + GRU | Better temporal patterns |
-| `crnn_temporal` | CRNN with custom GRU | Hailo-compatible |
+| Architecture    | Description               | Best For                 |
+|-----------------|---------------------------|--------------------------|
+| `cnn`           | Simple CNN (3 conv, 2 FC) | General use, fastest     |
+| `crnn`          | CNN + GRU                 | Better temporal patterns |
+| `crnn_temporal` | CRNN with custom GRU      | Hailo-compatible         |
 
 ## Test Your Model
 
