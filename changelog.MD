@@ -124,3 +124,10 @@ Load real noise samples instead of generate synthetic noise
 - Changed function `random_augmentation`: 
 - + commented old `add_noise` function
 - + added new `add_natural_noise` function
+
+## 2026-01-21 - Refactored Data Augmentation
+**Problem:** The previous script had a monolithic structure, did not allow enabling/disabling specific augmentation steps via command-line arguments
+
+**Changes:**
+- Added CLI arguments for each augmentation (`--synthetic-noise`, `--natural-noise`, `--time-stretch`, `--pitch-shift`, `--gain`, `--shift`, `--reverb`) and their probabilities (`--*_p`).
+- Implement augmentation with `audioaugmentations` module instead of previous solution

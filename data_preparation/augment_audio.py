@@ -14,24 +14,24 @@ from tqdm import tqdm
 import librosa
 import numpy as np
 from scipy.signal import fftconvolve
-from audiomentations import AddBackgroundNoise, PolarityInversion, AddShortNoises
+from audiomentations import (
+    Compose,
+    AddBackgroundNoise,
+    AddShortNoises,
+    TimeStretch,
+    PitchShift,
+    Gain,
+    Shift,
+    PolarityInversion,
+    AddGaussianNoise
+)
+from audiomentations.core.transforms_interface import BaseWaveformTransform
+
 from pathlib import Path
 
 # Add parent directory to path to import from utils
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.audio_processing import normalize_peak, normalize_rms
-
-
-def generate_synthetic_noises(n=5, sr=16000):
-    noises = []
-    for i in range(n):
-        dur = np.random.uniform(1.0, 3.0)  # 1–3 Sekunden
-        N = int(dur * sr)
-        noise = np.random.randn(N).astype(np.float32)
-        noise /= (np.max(np.abs(noise)) + 1e-6)
-        noises.append(noise)
-    return noises
-
 
 def generate_synthetic_rirs(n=5, sr=16000):
     rirs = []
@@ -45,30 +45,19 @@ def generate_synthetic_rirs(n=5, sr=16000):
         rirs.append(rir.astype(np.float32))
     return rirs
 
+class SyntheticRirs(BaseWaveformTransform):
+    def __init__(self, rirs, p=0.5):
+        super().__init__(p)
+        self.rirs = rirs
 
-def add_noise(x, noise, snr_db):
-    Nx = len(x)
-    Nn = len(noise)
+    def apply(self, samples: np.ndarray, sample_rate: int):
+        rir = random.choice(self.rirs)
+        out = fftconvolve(samples, rir, mode="full")
+        return out[:len(samples)]
 
-    # Adapt noise length
-    if Nn < Nx:
-        reps = int(np.ceil(Nx / Nn))
-        noise = np.tile(noise, reps)
-        noise = noise[:Nx]
+    def get_parameters(self):
+        return {"num_rirs": len(self.rirs)}
 
-    elif Nn > Nx:
-        start = np.random.randint(0, Nn - Nx)
-        noise = noise[start:start + Nx]
-
-    assert len(noise) == len(x)
-
-    rms_x = np.sqrt(np.mean(x ** 2))
-    rms_n = np.sqrt(np.mean(noise ** 2) + 1e-9)
-    snr = 10 ** (snr_db / 20)
-
-    noise_scaled = noise * (rms_x / (rms_n * snr))
-
-    return x + noise_scaled
 
 def has_wav(dir_path: str) -> bool:
     p = Path(dir_path)
@@ -76,96 +65,83 @@ def has_wav(dir_path: str) -> bool:
         return False
     return any(f.is_file() and f.suffix.lower() == ".wav" for f in p.rglob("*"))
 
-
-def add_natural_noise(x, sr=16000):
+def create_augmentation_pipeline(args, rirs):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     noises_dir = os.path.join(base_dir, "noises")
-
     noises_background_dir = os.path.join(noises_dir, "background")
-    noised_x = x.copy()
-
-    if has_wav(noises_background_dir):
-        background_transform = AddBackgroundNoise(
-            sounds_path=noises_background_dir, #load random noise from folder WakeWordDetection/data_preparation/noises
-            min_snr_db=0.0,
-            max_snr_db=10.0,
-            noise_transform=PolarityInversion(),
-            p=1.0
-        )
-        noised_x = background_transform(x, sample_rate=sr)
-
     short_noises_dir = os.path.join(noises_dir, "short")
-    if has_wav(short_noises_dir):
-        short_transform = AddShortNoises(
-            sounds_path=short_noises_dir,
-            min_snr_db=0.0,
-            max_snr_db=30.0,
-            noise_rms="relative",
-            min_time_between_sounds=0.25,
-            max_time_between_sounds=1.0,
-            noise_transform=PolarityInversion(),
-            p=1.0
+
+    sr = args.sr if args.sr else 16000
+    transforms = []
+    if args.synthetic_noise:
+        transforms.append(
+            AddGaussianNoise(
+                min_amplitude=0.001,
+                max_amplitude=0.015,
+                p=args.synthetic_noise_p
+            )
         )
-        noised_x = short_transform(noised_x, sample_rate=sr)
-    return noised_x
+    if args.natural_noise and has_wav(noises_background_dir): #Background natural noise
+        transforms.append(
+            AddBackgroundNoise(sounds_path=noises_background_dir,
+                min_snr_db=0, max_snr_db=5,
+                noise_transform=PolarityInversion(),
+                p=args.natural_noise_p
+            )
+        )
+
+    if args.natural_noise and has_wav(short_noises_dir): #Short natural noise
+        transforms.append(
+            AddShortNoises(sounds_path=short_noises_dir,
+                min_snr_db=0, max_snr_db=30,
+                noise_rms="relative",
+                min_time_between_sounds=0.25, max_time_between_sounds=1.0,
+                noise_transform=PolarityInversion(),
+                p=args.natural_noise_p
+            )
+        )
+
+    if args.time_stretch:                                  #Time stretch
+        transforms.append(
+            TimeStretch(
+                min_rate=0.85, max_rate=1.15,
+                p=args.time_stretch_p
+            )
+        )
+
+    if args.pitch_shift:                                   #Pitch shift
+        transforms.append(
+            PitchShift(
+                min_semitones=-4, max_semitones=4,
+                p=args.pitch_shift_p
+            )
+        )
+
+    if args.gain:                                           #Random gain
+        transforms.append(
+            Gain(
+                min_gain_db=-10, max_gain_db=6,
+                p=args.gain_p
+            )
+        )
+
+    if args.shift:                                          #Time shift
+        transforms.append(
+            Shift(
+                min_shift=-0.25, max_shift=0.25,
+                p=args.shift_p
+            )
+        )
+
+    if args.reverb:                                         #Synthetic reverb
+        transforms.append(
+            SyntheticRirs(rirs=rirs, p=args.reverb_p)
+        )
+
+    return Compose(transforms)
 
 
-def time_stretch(x, rate):
-    return librosa.effects.time_stretch(x, rate=rate)
-
-
-def pitch_shift(x, sr, steps):
-    return librosa.effects.pitch_shift(x, sr=sr, n_steps=steps)
-
-
-def random_gain(x, min_gain=0.3, max_gain=2.0):
-    gain = np.random.uniform(low=min_gain, high=max_gain)
-    return x * gain
-
-
-def random_time_shift(x, max_shift=6000):
-    shift = np.random.randint(-max_shift, max_shift)
-    return np.roll(x, shift)
-
-
-def reverb(x, rir):
-    out = fftconvolve(x, rir)
-    return out[:len(x)]
-
-
-def random_augmentation(x, sr, noises, rirs):
-    x_aug = x.copy()
-
-    #if random.random() < 0.7:
-    #    noise = random.choice(noises)
-    #    snr = random.uniform(0, 25)
-    #    x_aug = add_noise(x_aug, noise, snr)
-
-    if random.random() < 0.7:
-        x_aug = add_natural_noise(x_aug, sr)
-
-    if random.random() < 0.5:
-        rate = random.uniform(0.85, 1.15)
-        x_aug = time_stretch(x_aug, rate)
-
-    if random.random() < 0.5:
-        steps = random.uniform(-4, 4)
-        x_aug = pitch_shift(x_aug, sr, steps)
-
-    if random.random() < 0.7:
-        x_aug = random_gain(x_aug)
-
-    if random.random() < 0.6:
-        x_aug = random_time_shift(x_aug)
-
-    if random.random() < 0.4:
-        rir = random.choice(rirs)
-        x_aug = reverb(x_aug, rir)
-
-    return x_aug
-
-
-def augment_single_file(fn, out_dir, noises, rirs, input_dir, num_augmentations=200, sr=16000,
+def augment_single_file(fn, out_dir, augmentation, input_dir, num_augmentations=200, sr=16000,
                         normalize_input=True, normalize_method='peak', target_level=1.0):
     x, sr = librosa.load(fn, sr=sr)
 
@@ -191,9 +167,14 @@ def augment_single_file(fn, out_dir, noises, rirs, input_dir, num_augmentations=
     saved.append(orig_fn)
 
     for i in range(num_augmentations):
-        x_aug = random_augmentation(x, sr, noises, rirs)
+        x_aug = augmentation(samples=x, sample_rate=sr)
         # Clip to prevent values outside [-1, 1] range
         x_aug = np.clip(x_aug, -1.0, 1.0)
+        if len(x_aug) != len(x):
+            if len(x_aug) > len(x):
+                x_aug = x_aug[:len(x)]
+            else:
+                x_aug = np.pad(x_aug, (0, len(x) - len(x_aug)))
         out_fn = os.path.join(out_dir, f'{base_name}_aug{i:03d}.wav')
         sf.write(out_fn, x_aug, sr)
         saved.append(out_fn)
@@ -201,10 +182,11 @@ def augment_single_file(fn, out_dir, noises, rirs, input_dir, num_augmentations=
     return saved
 
 
-def augment_file_worker(fn, out_dir, noises, rirs, input_dir, num_augmentations, sr,
-                        normalize_input, normalize_method, target_level):
+def augment_file_worker(fn, out_dir, input_dir, rirs, num_augmentations, sr,
+                        normalize_input, normalize_method, target_level, args):
+    augmentation = create_augmentation_pipeline(args, rirs)
     try:
-        created = augment_single_file(fn, out_dir, noises, rirs, input_dir, num_augmentations, sr,
+        created = augment_single_file(fn, out_dir, augmentation, input_dir, num_augmentations, sr,
                                       normalize_input, normalize_method, target_level)
         return {
             'input': fn,
@@ -221,24 +203,7 @@ def augment_file_worker(fn, out_dir, noises, rirs, input_dir, num_augmentations,
             'error': str(e)
         }
 
-
-def load_noises(noise_dir, sr=16000):
-    noises = []
-    for fn in glob(os.path.join(noise_dir, '*.wav')):
-        n, _ = librosa.load(fn, sr=sr)
-        noises.append(n)
-    return noises
-
-
-def load_rirs(rir_dir, sr=16000):
-    rirs = []
-    for fn in glob(os.path.join(rir_dir, '*.wav')):
-        rir, _ = librosa.load(fn, sr=sr)
-        rirs.append(rir)
-    return rirs
-
-
-def write_augmentation_report(out_dir, input_dir, file_details, noises, rirs, start_time, end_time,
+def write_augmentation_report(out_dir, input_dir, augment, file_details, rirs, start_time, end_time,
                               num_augmentations, num_workers, normalize_input, normalize_method, target_level,
                               total_files_found=None, sampled=False):
     duration = (end_time - start_time).total_seconds()
@@ -275,17 +240,12 @@ def write_augmentation_report(out_dir, input_dir, file_details, noises, rirs, st
         if normalize_input:
             f.write(f'Normalization method: {normalize_method}\n')
             f.write(f'Target level: {target_level}\n')
-        f.write(f'Synthetic noises generated: {len(noises)}\n')
         f.write(f'Synthetic RIRs generated: {len(rirs)}\n\n')
 
-        f.write('AUGMENTATION PARAMETERS:\n')
-        f.write('-' * 80 + '\n')
-        f.write('- Noise addition: 70% probability, SNR 0-25 dB\n')
-        f.write('- Time stretching: 50% probability, rate 0.85-1.15\n')
-        f.write('- Pitch shifting: 50% probability, ±4 semitones\n')
-        f.write('- Random gain: 70% probability, gain 0.3-2.0 (wider range prevents volume bias)\n')
-        f.write('- Time shift: 60% probability, max ±6000 samples\n')
-        f.write('- Reverb: 40% probability\n\n')
+        f.write("\nAUGMENTATION PIPELINE\n")
+        f.write("-" * 80 + "\n")
+        for t in augment.transforms:
+            f.write(f"- {t}\n")
 
         f.write('SUMMARY:\n')
         f.write('-' * 80 + '\n')
@@ -323,60 +283,77 @@ if __name__ == '__main__':
         epilog='''
 Examples:
   # Basic usage with peak normalization (matches training preprocessing)
-  python augment_audio.py --in data/wakeword --out data/wakeword_augmented
+  python augment_audio.py -i data/wakeword -o data/wakeword_augmented
 
   # Limit to ~1000 output files by randomly sampling input files
-  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --max_output_files 1000
+  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --max-output-files 1000
 
   # Use RMS normalization instead
-  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --normalize rms --target_level 0.1
+  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --normalize-method rms --target-level 0.1
 
   # Disable normalization (not recommended - may cause volume bias)
-  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --normalize none
+  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --no-normalize
 
   # Process with 4 workers and fewer augmentations for testing
-  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --workers 4 --num_augmentations 50
+  python augment_audio.py -i data/wakeword -o data/wakeword_augmented -j 4 --num-aug 50
 
   # Quick test: generate only 100 files with 10 augmentations each
-  python augment_audio.py --in data/wakeword --out data/wakeword_augmented --max_output_files 100 --num_augmentations 10 --workers 4
+  python augment_audio.py -i data/wakeword -o data/wakeword_augmented --max-output-files 100 --num-aug 10 -j 4
         '''
     )
-    parser.add_argument('-i', '--in', dest='wakeword_in', required=True, help='Input directory containing audio files')
-    parser.add_argument('-o', '--out', dest='wakeword_out', required=True, help='Output directory for augmented files')
-    parser.add_argument('--noise', default='data/noise',
-                        help='Directory containing noise files (default: data/noise)')
-    parser.add_argument('--rir', default='data/rir', help='Directory containing RIR files (default: data/rir)')
-    parser.add_argument('--num_augmentations', type=int, default=200, help='Number of augmentations per file (default: 200)')
+    parser.add_argument('-i', '--input', required=True, help='Input directory containing audio files')
+    parser.add_argument('-o', '--output', required=True, help='Output directory for augmented files')
+    parser.add_argument('--num-aug', type=int, default=200, help='Number of augmentations per file (default: 200)')
     parser.add_argument('--sr', type=int, default=16000, help='Sample rate (default: 16000)')
-    parser.add_argument('--workers', type=int, default=None,
+    parser.add_argument('-j', '--jobs', type=int, default=None,
                         help='Number of parallel workers (default: number of CPU cores)')
-    parser.add_argument('--normalize', choices=['peak', 'rms', 'none'], default='peak',
-                        help='Normalization method: peak (matches training), rms, or none (default: peak)')
-    parser.add_argument('--target_level', type=float, default=1.0,
+    parser.add_argument('--normalize-method', choices=['peak', 'rms'], default='peak',
+                        help='Normalization method: peak (matches training) or rms (default: peak)')
+    parser.add_argument('--target-level', type=float, default=1.0,
                         help='Target level for normalization: 1.0 for peak, 0.1 for rms (default: 1.0)')
-    parser.add_argument('--max_output_files', type=int, default=None,
+    parser.add_argument('--no-normalize', action='store_true',
+                        help='Disable input normalization (NOT RECOMMENDED - may cause volume bias)')
+    parser.add_argument('--max-output-files', type=int, default=None,
                         help='Maximum number of output files to generate. If specified, randomly samples input files uniformly.')
 
+    parser.add_argument("--synthetic-noise", action="store_true", help="Enable adding Gaussian noises")
+    parser.add_argument("--synthetic-noise-p", type=float, default=0.5, help="Probability of applying Gaussian noise augmentation (default: 0.5)")
+    # Augmentations
+    parser.add_argument("--natural-noise", action="store_true",help="Enable adding natural background and short noises from the noise dataset")
+    parser.add_argument("--natural-noise-p", type=float, default=0.7,help="Probability of applying natural noise augmentation (default: 0.7)")
+
+    parser.add_argument("--time-stretch", action="store_true",help="Enable time stretching augmentation")
+    parser.add_argument("--time-stretch-p", type=float, default=0.5,help="Probability of applying time stretching (default: 0.5)")
+
+    parser.add_argument("--pitch-shift", action="store_true",help="Enable pitch shifting augmentation")
+    parser.add_argument("--pitch-shift-p", type=float, default=0.5,help="Probability of applying pitch shifting (default: 0.5)")
+
+    parser.add_argument("--gain", action="store_true",help="Enable gain (volume scaling) augmentation")
+    parser.add_argument("--gain-p", type=float, default=0.7,help="Probability of applying gain augmentation (default: 0.7)")
+
+    parser.add_argument("--shift", action="store_true",help="Enable random time shift augmentation")
+    parser.add_argument("--shift-p", type=float, default=0.6,help="Probability of applying shifting augmentation (default: 0.6)")
+
+    parser.add_argument("--reverb", action="store_true",help="Enable synthetic reverberation using generated impulse responses")
+    parser.add_argument("--reverb-p", type=float, default=0.4,help="Probability of applying reverberation augmentation (default: 0.4)")
     args = parser.parse_args()
 
-    input_dir = args.wakeword_in
-    out_dir = args.wakeword_out
-    noise_dir = args.noise
-    rir_dir = args.rir
-    num_augmentations = args.num_augmentations
+    input_dir = args.input
+    out_dir = args.output
+
+    num_augmentations = args.num_aug
     sr = args.sr
-    num_workers = args.workers if args.workers is not None else cpu_count()
-    normalize_input = args.normalize != 'none'
-    normalize_method = args.normalize if args.normalize != 'none' else 'peak'
+    num_workers = args.jobs if args.jobs is not None else cpu_count()
+    normalize_input = not args.no_normalize
+    normalize_method = args.normalize_method
     target_level = args.target_level
     max_output_files = args.max_output_files
 
     os.makedirs(out_dir, exist_ok=True)
-    os.makedirs(noise_dir, exist_ok=True)
-    os.makedirs(rir_dir, exist_ok=True)
 
     # Find all audio files
     audio_files = glob(os.path.join(input_dir, '**/*.wav'), recursive=True)
+
     total_files_found = len(audio_files)
     print(f'Found {total_files_found} audio files.')
 
@@ -402,10 +379,10 @@ Examples:
     else:
         print('WARNING: Normalization disabled - this may cause volume bias!')
 
-    noises = generate_synthetic_noises(sr=sr)
     rirs = generate_synthetic_rirs(sr=sr)
 
-    print(f'Generated {len(noises)} noises and {len(rirs)} rirs.')
+    print(f'Generated {len(rirs)} rirs.')
+    augmentation = create_augmentation_pipeline(args, rirs)
 
     start_time = datetime.now()
 
@@ -413,14 +390,14 @@ Examples:
     worker_func = partial(
         augment_file_worker,
         out_dir=out_dir,
-        noises=noises,
-        rirs=rirs,
         input_dir=input_dir,
+        rirs=rirs,
         num_augmentations=num_augmentations,
         sr=sr,
         normalize_input=normalize_input,
         normalize_method=normalize_method,
-        target_level=target_level
+        target_level=target_level,
+        args=args
     )
 
     # Process files in parallel with progress bar
@@ -446,7 +423,7 @@ Examples:
 
     # Write documentation file
     doc_path = write_augmentation_report(
-        out_dir, input_dir, file_details, noises, rirs,
+        out_dir, input_dir, augmentation, file_details, rirs,
         start_time, end_time, num_augmentations, num_workers,
         normalize_input, normalize_method, target_level,
         total_files_found, sampled

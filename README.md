@@ -25,7 +25,13 @@ pip install -r requirements.txt
 python data_preparation/download_non_wakeword.py
 
 # Augment wake word samples (place yours in data/wakeword/ first)
-python data_preparation/augment_audio.py --in data/wakeword --out data/wakeword_augmented --num_augmentations 100
+python data_preparation/augment_audio.py --in data/wakeword --out data/wakeword_augmented --num_augmentations 100 \
+  --natural-noise \
+  --time-stretch \
+  --pitch-shift \
+  --gain \
+  --shift \
+  --reverb
 
 # Train model
 python train_cnn.py
