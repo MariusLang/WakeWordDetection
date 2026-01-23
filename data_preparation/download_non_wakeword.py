@@ -12,8 +12,8 @@ NON_WAKE_CLASSES = [
     'on', 'off', 'go', 'stop',
     'bed', 'cat', 'dog', 'house',
     'backward', 'forward', 'follow', 'learn', 'visual',
-    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
-    'bird', 'happy', 'marvin', 'tree', 'wow',
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    'bird', 'happy', 'marvin', 'sheila', 'tree', 'wow',
     '_background_noise_'
 ]
 
