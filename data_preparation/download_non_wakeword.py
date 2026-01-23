@@ -10,8 +10,10 @@ ARCHIVE = 'speech_commands.tar.gz'
 NON_WAKE_CLASSES = [
     'yes', 'no', 'up', 'down', 'left', 'right',
     'on', 'off', 'go', 'stop',
-    'one', 'two', 'three', 'four', 'five',
     'bed', 'cat', 'dog', 'house',
+    'backward', 'forward', 'follow', 'learn', 'visual',
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'bird', 'happy', 'marvin', 'tree', 'wow',
     '_background_noise_'
 ]
 
