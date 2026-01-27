@@ -8,7 +8,7 @@
 ## Train the Model
 
 ```bash
-python train_cnn.py
+python train_entry.py
 ```
 
 This loads data, generates a balanced dataset, trains with early stopping, and creates an experiment directory.
