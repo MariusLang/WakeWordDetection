@@ -25,16 +25,11 @@ pip install -r requirements.txt
 python data_preparation/download_non_wakeword.py
 
 # Augment wake word samples (place yours in data/wakeword/ first)
-python data_preparation/augment_audio.py --in data/wakeword --out data/wakeword_augmented --num_augmentations 100 \
-  --natural-noise \
-  --time-stretch \
-  --pitch-shift \
-  --gain \
-  --shift \
-  --reverb
+python data_preparation/augment_audio.py --input data/wakeword --output data/wakeword_augmented --num-aug 100 \
+  --natural-noise --time-stretch --pitch-shift --gain --shift --reverb
 
 # Train model
-python train_cnn.py
+python train_entry.py
 
 # Test inference
 python -m detection.pytorch.pytorch_inference path/to/audio.wav --model experiments/wakeword_model_TIMESTAMP/
@@ -47,7 +42,7 @@ For Hailo deployment, see [Model Compilation](docs/model-compilation.md) and [De
 ```
 WakeWordDetection/
 ├── config.ini                 # Configuration file
-├── train_cnn.py               # Main training script
+├── train_entry.py             # Main training script
 ├── data/                      # Training data
 ├── experiments/               # Training runs (auto-generated)
 ├── model/                     # Neural network architectures
